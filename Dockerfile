@@ -7,8 +7,6 @@ RUN npm ci
 
 COPY . .
 
-ARG BACKEND_URL=http://localhost:3001
-ENV BACKEND_URL=${BACKEND_URL}
 ENV NEXT_PUBLIC_API_URL=/api
 
 RUN npm run build

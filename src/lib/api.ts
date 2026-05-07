@@ -699,4 +699,94 @@ export const api = {
         body: JSON.stringify(data),
       }
     ),
+
+  // Analytics elite-grade
+  hitRate: (productId: string, days = 30) =>
+    request<HitRateResponse>(`/analytics/hit-rate/${productId}${qs({ days })}`),
+  profitWaterfall: (productId: string, days = 7) =>
+    request<ProfitWaterfallResponse>(`/analytics/profit-waterfall/${productId}${qs({ days })}`),
+  paybackCohort: (productId: string, days = 30) =>
+    request<PaybackCohortResponse>(`/analytics/payback-cohort/${productId}${qs({ days })}`),
+  ltvCohort: (productId: string, days = 90) =>
+    request<LtvCohortResponse>(`/analytics/ltv-cohort/${productId}${qs({ days })}`),
+  awarenessAnalytics: (productId: string, days = 30) =>
+    request<AwarenessResponse>(`/analytics/awareness/${productId}${qs({ days })}`),
 };
+
+export type AwarenessStage = "unaware" | "problem" | "solution" | "product" | "most_aware";
+
+export interface HitRateResponse {
+  windowDays: number;
+  totalLaunched: number;
+  winners: number;
+  losers: number;
+  pendingEvaluation: number;
+  hitRatePct: number;
+  benchmark: { elite: number; mediano: number };
+  topWinners: Array<{
+    id: string;
+    name: string;
+    type: string;
+    cpa: number | null;
+    hookRate: number | null;
+    ctr: number | null;
+    daysActive: number;
+  }>;
+  worstLosers: Array<{
+    id: string;
+    name: string;
+    type: string;
+    cpa: number | null;
+    hookRate: number | null;
+    ctr: number | null;
+    daysActive: number;
+  }>;
+}
+
+export interface ProfitWaterfallResponse {
+  windowDays: number;
+  steps: Array<{ label: string; value: number; pct: number }>;
+  contributionMargin: number;
+  contributionMarginPct: number;
+  roas: number | null;
+  spend: number;
+  grossRevenue: number;
+}
+
+export interface PaybackCohortResponse {
+  windowDays: number;
+  rows: Array<{
+    cohortDate: string;
+    spend: number;
+    cumRevenueD1: number;
+    cumRevenueD7: number;
+    cumRevenueD14: number;
+    cumRevenueD30: number;
+    paybackDay: number | null;
+  }>;
+  avgPaybackDays: number | null;
+}
+
+export interface LtvCohortResponse {
+  windowDays: number;
+  rows: Array<{
+    cohortWeek: string;
+    buyers: number;
+    ltvD7: number;
+    ltvD14: number;
+    ltvD30: number;
+    ltvD60: number;
+  }>;
+}
+
+export interface AwarenessResponse {
+  rows: Array<{
+    stage: string;
+    creativeCount: number;
+    avgCpa: number | null;
+    avgHookRate: number | null;
+    winnerRate: number;
+  }>;
+  taggedCount: number;
+  untaggedCount: number;
+}

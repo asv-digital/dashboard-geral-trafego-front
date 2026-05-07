@@ -39,6 +39,14 @@ export default function ProductOverviewPage({
 
   return (
     <div className="p-8 space-y-8">
+      {productData?.supervisedMode && (
+        <div className="text-sm px-4 py-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-3">
+          <span className="font-medium">SUPERVISED MODE ON</span>
+          <span className="text-amber-400/80">
+            agente coleta+sugere mas não muda nada no Meta. Desligue em /config quando confiar.
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Gasto" value={formatBRL(overviewData?.totalSpend)} />
         <KpiCard

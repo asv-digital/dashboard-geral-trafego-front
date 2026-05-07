@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   api,
@@ -263,6 +263,7 @@ export default function SettingsPage() {
             onChange={value => setGlobalField("metaTokenCreatedAt", value)}
             type="datetime-local"
           />
+          <TokenExpiryBadge createdAt={metaForm.metaTokenCreatedAt} />
           <TextField
             label="Ad account ID"
             value={metaForm.metaAdAccountId || ""}
@@ -570,6 +571,47 @@ function TextField({
         className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       />
     </label>
+  );
+}
+
+// D3 — UI sync do alerta de token Meta. Token long-lived expira em 60d.
+// Cores: verde >10d, amarelo 4-10d, laranja 1-3d, vermelho expirado.
+// Calcula em useEffect pra respeitar react-hooks/purity (Date.now impuro).
+function TokenExpiryBadge({ createdAt }: { createdAt?: string | null }) {
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const handle = setInterval(() => setNow(Date.now()), 60 * 60 * 1000);
+    return () => clearInterval(handle);
+  }, []);
+  if (!createdAt) {
+    return (
+      <div className="text-xs text-muted-foreground">
+        Sem data de criação. Configure pra receber alertas de expiração.
+      </div>
+    );
+  }
+  const created = new Date(createdAt);
+  if (Number.isNaN(created.getTime())) return null;
+  const ageDays = (now - created.getTime()) / (1000 * 60 * 60 * 24);
+  const daysToExpire = 60 - ageDays;
+
+  let label: string;
+  let cls: string;
+  if (daysToExpire <= 0) {
+    label = `Token VENCEU há ${Math.abs(Math.round(daysToExpire))} dia(s) — coletor não funciona`;
+    cls = "bg-red-500/10 text-red-500 border-red-500/30";
+  } else if (daysToExpire <= 3) {
+    label = `Token vence em ${Math.ceil(daysToExpire)} dia(s) — TROCAR HOJE`;
+    cls = "bg-orange-500/10 text-orange-500 border-orange-500/30";
+  } else if (daysToExpire <= 10) {
+    label = `Token vence em ${Math.ceil(daysToExpire)} dia(s) — programe a troca`;
+    cls = "bg-yellow-500/10 text-yellow-500 border-yellow-500/30";
+  } else {
+    label = `Token saudável (${Math.ceil(daysToExpire)} dia(s) até expirar)`;
+    cls = "bg-emerald-500/10 text-emerald-500 border-emerald-500/30";
+  }
+  return (
+    <div className={`text-xs px-3 py-2 rounded-md border ${cls}`}>{label}</div>
   );
 }
 

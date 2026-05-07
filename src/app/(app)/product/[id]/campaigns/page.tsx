@@ -122,7 +122,17 @@ function CampaignRow({
 }) {
   return (
     <tr className="border-t border-border hover:bg-muted/20">
-      <td className="px-4 py-3 font-medium">{campaign.name}</td>
+      <td className="px-4 py-3 font-medium">
+        {campaign.name}
+        {campaign.isASC && (
+          <span
+            className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/30"
+            title="Advantage+ Shopping Campaign — IA do Meta gerencia audiência/criativo/placement"
+          >
+            ASC
+          </span>
+        )}
+      </td>
       <td className="px-4 py-3 text-muted-foreground text-xs">{campaign.type}</td>
       <td className="px-4 py-3">
         <span

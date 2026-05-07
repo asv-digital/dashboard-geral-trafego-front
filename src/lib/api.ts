@@ -113,6 +113,8 @@ export interface CampaignListItem {
   productId: string;
   name: string;
   type: string;
+  // M2 — flag ASC nativo (Advantage+ Shopping Campaign). Substitui detecao por nome.
+  isASC: boolean;
   audience: string | null;
   dailyBudget: number;
   startDate: string;
@@ -142,7 +144,12 @@ export interface MetricItem {
   investment: number;
   impressions: number;
   clicks: number;
+  // sales = melhor estimativa (kirvano > pixel fallback). Display only.
   sales: number;
+  // C8 — venda autoritativa via webhook Kirvano (decisao automatica).
+  salesKirvano: number;
+  // C8 — venda atribuida por Pixel/Insights (observabilidade only).
+  salesPixel: number;
   frequency: number;
   hookRate: number | null;
   observations: string | null;
@@ -211,6 +218,8 @@ export interface CreativeItem {
   productId: string;
   campaignId: string | null;
   name: string;
+  // M4 — metaAdId estavel (populado no creative-performance no primeiro match).
+  metaAdId: string | null;
   type: string;
   status: string;
   ctr: number | null;
@@ -218,6 +227,46 @@ export interface CreativeItem {
   cpa: number | null;
   thruplayRate: number | null;
   campaign?: { name: string } | null;
+}
+
+// C5/D1/D5 — Sale com enrichment fields + capiResponse pra observabilidade.
+export interface SaleItem {
+  id: string;
+  productId: string;
+  campaignId: string | null;
+  date: string;
+  amountGross: number;
+  amountNet: number;
+  status: "approved" | "pending" | "refunded" | "chargeback";
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+  metaCampaignId: string | null;
+  metaAdsetId: string | null;
+  metaAdId: string | null;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerName: string | null;
+  kirvanoTxId: string;
+  capiSent: boolean;
+  capiSentAt: string | null;
+  capiEventId: string | null;
+  capiResponse: {
+    eventsReceived?: number;
+    fbtraceId?: string;
+    diagnostics?: unknown;
+    error?: string;
+  } | null;
+  fbc: string | null;
+  fbp: string | null;
+  clientIp: string | null;
+  clientUserAgent: string | null;
+  eventSourceUrl: string | null;
+  externalId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface GlobalPnlProduct {
@@ -540,7 +589,7 @@ export const api = {
   listSales: (
     productId: string,
     params: { dateFrom?: string; dateTo?: string; status?: string } = {}
-  ) => request<{ sales: unknown[] }>(`/sales${qs({ productId, ...params })}`),
+  ) => request<{ sales: SaleItem[] }>(`/sales${qs({ productId, ...params })}`),
   salesSummary: (productId: string, dateFrom?: string, dateTo?: string) =>
     request<{ summary: SaleSummary }>(
       `/sales/summary${qs({ productId, dateFrom, dateTo })}`

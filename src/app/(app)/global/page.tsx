@@ -14,6 +14,7 @@ import { formatBRL, formatNumber } from "@/lib/format";
 
 export default function GlobalPage() {
   const [now, setNow] = useState(0);
+  const [days, setDays] = useState<number>(7);
 
   useEffect(() => {
     const syncNow = () => setNow(Date.now());
@@ -23,8 +24,8 @@ export default function GlobalPage() {
   }, []);
 
   const { data: pnl } = useQuery({
-    queryKey: ["global", "pnl", 7],
-    queryFn: () => api.globalPnl(7),
+    queryKey: ["global", "pnl", days],
+    queryFn: () => api.globalPnl(days),
     refetchInterval: 60_000,
   });
   const { data: activity } = useQuery({
@@ -38,8 +39,8 @@ export default function GlobalPage() {
     refetchInterval: 30_000,
   });
   const { data: overview } = useQuery({
-    queryKey: ["global", "overview", 7],
-    queryFn: () => api.globalOverview(7),
+    queryKey: ["global", "overview", days],
+    queryFn: () => api.globalOverview(days),
     refetchInterval: 60_000,
   });
 
@@ -54,11 +55,14 @@ export default function GlobalPage() {
 
   return (
     <div className="p-8 space-y-8">
-      <header>
-        <h1 className="text-2xl font-heading font-semibold">Visão Geral</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Últimos 7 dias — todos os produtos
-        </p>
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-heading font-semibold">Visão Geral</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Últimos {days} dias — todos os produtos
+          </p>
+        </div>
+        <PeriodPicker value={days} onChange={setDays} />
       </header>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -180,6 +184,40 @@ const HEALTH_BADGE: Record<ProductHealth, { label: string; cls: string }> = {
   mediano: { label: "mediano", cls: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30" },
   critico: { label: "crítico", cls: "bg-destructive/10 text-destructive border-destructive/30" },
 };
+
+function PeriodPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const options = [
+    { v: 1, label: "Hoje" },
+    { v: 7, label: "7d" },
+    { v: 14, label: "14d" },
+    { v: 30, label: "30d" },
+    { v: 60, label: "60d" },
+    { v: 90, label: "90d" },
+  ];
+  return (
+    <div className="flex gap-1 border border-border rounded-lg p-1 bg-card">
+      {options.map(opt => (
+        <button
+          key={opt.v}
+          onClick={() => onChange(opt.v)}
+          className={`text-xs px-3 py-1.5 rounded transition-colors ${
+            value === opt.v
+              ? "bg-primary text-primary-foreground font-medium"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function ProductRow({
   product,

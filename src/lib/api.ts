@@ -714,57 +714,93 @@ export const api = {
 };
 
 export type AwarenessStage = "unaware" | "problem" | "solution" | "product" | "most_aware";
+export type CreativeBucket =
+  | "winner" | "survivor" | "loser" | "pending_days" | "pending_spend";
+export type CohortMaturityStatus = "paid" | "in_progress" | "never_paid";
+export type AudienceType = "Prospecção" | "Remarketing" | "ASC";
+
+export interface CreativeHitRateItem {
+  id: string;
+  name: string;
+  type: string;
+  bucket: CreativeBucket;
+  cpa: number | null;
+  hookRate: number | null;
+  ctr: number | null;
+  spendEstimated: number;
+  salesEstimated: number;
+  velocityPerDay: number;
+  daysActive: number;
+}
 
 export interface HitRateResponse {
   windowDays: number;
+  thresholds: { breakevenCPA: number; scaleCPA: number; minSpendForEval: number };
   totalLaunched: number;
-  winners: number;
-  losers: number;
-  pendingEvaluation: number;
+  evaluable: number;
+  buckets: {
+    winner: number;
+    survivor: number;
+    loser: number;
+    pendingDays: number;
+    pendingSpend: number;
+  };
   hitRatePct: number;
   benchmark: { elite: number; mediano: number };
-  topWinners: Array<{
-    id: string;
-    name: string;
-    type: string;
-    cpa: number | null;
-    hookRate: number | null;
-    ctr: number | null;
-    daysActive: number;
-  }>;
-  worstLosers: Array<{
-    id: string;
-    name: string;
-    type: string;
-    cpa: number | null;
-    hookRate: number | null;
-    ctr: number | null;
-    daysActive: number;
-  }>;
+  monthly: Array<{ month: string; launched: number; winners: number; rate: number }>;
+  topWinners: CreativeHitRateItem[];
+  worstLosers: CreativeHitRateItem[];
 }
 
+export interface ProfitWaterfallStep {
+  label: string;
+  value: number;
+  pct: number;
+  kind: "input" | "deduction" | "addition" | "result";
+}
 export interface ProfitWaterfallResponse {
   windowDays: number;
-  steps: Array<{ label: string; value: number; pct: number }>;
+  steps: ProfitWaterfallStep[];
+  grossRevenue: number;
+  refundAmount: number;
+  chargebackAmount: number;
+  gatewayFee: number;
+  netRevenue: number;
+  affiliateCommission: number;
+  spend: number;
+  upsellRevenue: number;
+  taxEstimate: number;
   contributionMargin: number;
   contributionMarginPct: number;
   roas: number | null;
-  spend: number;
-  grossRevenue: number;
+  profitPerSale: number | null;
+  approvedSales: number;
+  delta: { grossRevenuePct: number | null; cmPct: number | null; salesPct: number | null };
 }
 
+export interface PaybackByEntity {
+  name: string;
+  spend: number;
+  revenue: number;
+  paybackDay: number | null;
+  status: CohortMaturityStatus;
+}
+export interface PaybackCohortRow {
+  cohortDate: string;
+  spend: number;
+  cumRevenueD1: number | null;
+  cumRevenueD7: number | null;
+  cumRevenueD14: number | null;
+  cumRevenueD30: number | null;
+  paybackDay: number | null;
+  status: CohortMaturityStatus;
+}
 export interface PaybackCohortResponse {
   windowDays: number;
-  rows: Array<{
-    cohortDate: string;
-    spend: number;
-    cumRevenueD1: number;
-    cumRevenueD7: number;
-    cumRevenueD14: number;
-    cumRevenueD30: number;
-    paybackDay: number | null;
-  }>;
+  rows: PaybackCohortRow[];
   avgPaybackDays: number | null;
+  byAdset: PaybackByEntity[];
+  byCreative: PaybackByEntity[];
 }
 
 export interface LtvCohortResponse {
@@ -772,21 +808,35 @@ export interface LtvCohortResponse {
   rows: Array<{
     cohortWeek: string;
     buyers: number;
+    cac: number;
     ltvD7: number;
     ltvD14: number;
     ltvD30: number;
     ltvD60: number;
+    ltvCacRatio: number | null;
+    mentoriaConvPct: number;
+    retainedD30: number;
   }>;
+  rule: string;
 }
 
+export interface AwarenessCell {
+  count: number;
+  avgCpa: number | null;
+  avgHookRate: number | null;
+  winners: number;
+  winnerRate: number;
+}
+export interface AwarenessRow {
+  stage: string;
+  cells: Record<AudienceType, AwarenessCell>;
+  total: AwarenessCell;
+}
 export interface AwarenessResponse {
-  rows: Array<{
-    stage: string;
-    creativeCount: number;
-    avgCpa: number | null;
-    avgHookRate: number | null;
-    winnerRate: number;
-  }>;
+  audienceTypes: readonly AudienceType[];
+  rows: AwarenessRow[];
   taggedCount: number;
   untaggedCount: number;
+  bestPair: { stage: string; audience: AudienceType; winnerRate: number } | null;
+  worstPair: { stage: string; audience: AudienceType; winnerRate: number } | null;
 }

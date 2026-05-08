@@ -8,6 +8,7 @@ import {
   type ActivityItem,
   type GlobalPnlProduct,
   type HeartbeatItem,
+  type ProductHealth,
 } from "@/lib/api";
 import { formatBRL, formatNumber } from "@/lib/format";
 
@@ -36,6 +37,15 @@ export default function GlobalPage() {
     queryFn: () => api.globalHeartbeats(),
     refetchInterval: 30_000,
   });
+  const { data: overview } = useQuery({
+    queryKey: ["global", "overview", 7],
+    queryFn: () => api.globalOverview(7),
+    refetchInterval: 60_000,
+  });
+
+  const healthMap = new Map<string, ProductHealth>();
+  for (const p of overview?.products ?? []) healthMap.set(p.productId, p.health);
+  const topAlerts = overview?.topAlerts ?? [];
 
   const totals = pnl?.totals ?? { spend: 0, sales: 0, revenue: 0, profit: 0 };
   const products = pnl?.products ?? [];
@@ -61,6 +71,31 @@ export default function GlobalPage() {
           tone={totals.profit >= 0 ? "success" : "danger"}
         />
       </div>
+
+      {topAlerts.length > 0 && (
+        <section>
+          <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+            Alertas ativos ({topAlerts.length})
+          </h2>
+          <div className="bg-card border border-destructive/30 rounded-lg overflow-hidden">
+            {topAlerts.map((alert, i) => (
+              <div
+                key={`${alert.productSlug}-${alert.type}-${i}`}
+                className="flex items-center justify-between px-4 py-2.5 border-b border-border last:border-b-0 text-sm gap-3"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
+                  <span className="text-muted-foreground text-xs uppercase tracking-wider shrink-0">
+                    {alert.productSlug}
+                  </span>
+                  <span className="truncate">{alert.type}</span>
+                </div>
+                <span className="text-xs text-muted-foreground shrink-0">{alert.detail}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
@@ -90,7 +125,11 @@ export default function GlobalPage() {
               </thead>
               <tbody>
                 {products.map(product => (
-                  <ProductRow key={product.productId} product={product} />
+                  <ProductRow
+                    key={product.productId}
+                    product={product}
+                    health={healthMap.get(product.productId)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -135,16 +174,38 @@ export default function GlobalPage() {
   );
 }
 
-function ProductRow({ product }: { product: GlobalPnlProduct }) {
+const HEALTH_BADGE: Record<ProductHealth, { label: string; cls: string }> = {
+  elite: { label: "elite", cls: "bg-success/10 text-success border-success/30" },
+  bom: { label: "bom", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  mediano: { label: "mediano", cls: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30" },
+  critico: { label: "crítico", cls: "bg-destructive/10 text-destructive border-destructive/30" },
+};
+
+function ProductRow({
+  product,
+  health,
+}: {
+  product: GlobalPnlProduct;
+  health?: ProductHealth;
+}) {
   return (
     <tr className="border-t border-border hover:bg-muted/20">
       <td className="px-4 py-3">
-        <Link
-          href={`/product/${product.productId}`}
-          className="font-medium hover:text-primary"
-        >
-          {product.name}
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/product/${product.productId}`}
+            className="font-medium hover:text-primary"
+          >
+            {product.name}
+          </Link>
+          {health && (
+            <span
+              className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${HEALTH_BADGE[health].cls}`}
+            >
+              {HEALTH_BADGE[health].label}
+            </span>
+          )}
+        </div>
       </td>
       <td className="px-4 py-3 text-muted-foreground text-xs">{product.stage}</td>
       <td className="px-4 py-3 text-right tabular-nums">

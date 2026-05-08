@@ -725,7 +725,65 @@ export const api = {
     request<ClassifyAwarenessResponse>(`/analytics/classify-awareness/${productId}`, {
       method: "POST",
     }),
+
+  // Onda Visual 1
+  timeseries: (productId: string, metric: TimeseriesMetric, days = 14) =>
+    request<TimeseriesResponse>(`/analytics/timeseries/${productId}${qs({ metric, days })}`),
+  briefing: (productId: string, refresh = false) =>
+    request<BriefingResponse>(`/analytics/briefing/${productId}${qs({ refresh })}`),
+  globalOverview: (days = 7) =>
+    request<GlobalOverviewResponse>(`/analytics/global-overview${qs({ days })}`),
 };
+
+export type TimeseriesMetric = "cpa" | "roas" | "sales" | "spend" | "cm" | "hookRate";
+export interface TimeseriesPoint {
+  date: string;
+  value: number | null;
+}
+export interface TimeseriesResponse {
+  metric: TimeseriesMetric;
+  windowDays: number;
+  points: TimeseriesPoint[];
+  current: number | null;
+  previous: number | null;
+  deltaPct: number | null;
+}
+
+export interface BriefingResponse {
+  productId: string;
+  generatedAt: string;
+  briefing: string;
+  cached: boolean;
+}
+
+export type ProductHealth = "elite" | "bom" | "mediano" | "critico";
+export interface GlobalOverviewProduct {
+  productId: string;
+  slug: string;
+  name: string;
+  stage: string;
+  spend: number;
+  sales: number;
+  revenue: number;
+  cm: number;
+  cpa: number | null;
+  roas: number | null;
+  alerts: number;
+  health: ProductHealth;
+}
+export interface GlobalOverviewResponse {
+  windowDays: number;
+  totals: {
+    spend: number;
+    sales: number;
+    revenue: number;
+    cm: number;
+    cpa: number | null;
+    roas: number | null;
+  };
+  products: GlobalOverviewProduct[];
+  topAlerts: Array<{ productSlug: string; type: string; detail: string }>;
+}
 
 export type AwarenessStage = "unaware" | "problem" | "solution" | "product" | "most_aware";
 export type CreativeBucket =

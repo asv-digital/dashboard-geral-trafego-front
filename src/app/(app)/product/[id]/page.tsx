@@ -20,15 +20,35 @@ import {
   type BriefingResponse,
   type CeoReportResponse,
   type CreativeMismatch,
-  type CreativeVolumeScoreResponse,
   type DecisionQueueResponse,
   type EmergencyStopResponse,
+  type HeroKpiItem,
+  type HeroKpisResponse,
   type MonthlyPaceResponse,
   type PaceStatus,
-  type ProfitWaterfallResponse,
   type TimeseriesMetric,
 } from "@/lib/api";
-import { formatBRL, formatNumber } from "@/lib/format";
+import { formatBRL, formatNumber, formatRelativeTime } from "@/lib/format";
+import { KpiCard } from "@/components/ui/kpi-card";
+import { PeriodPicker } from "@/components/ui/period-picker";
+import { PulseLine } from "@/components/ui/pulse-line";
+import { StatusBadge, StatusDot, type Tone } from "@/components/ui/status-badge";
+
+const PACE_TONE: Record<PaceStatus, Tone> = {
+  ahead: "success",
+  on_track: "success",
+  behind: "warning",
+  critical: "danger",
+  no_goal: "muted",
+};
+
+const PACE_LABEL: Record<PaceStatus, string> = {
+  ahead: "Adiante",
+  on_track: "No ritmo",
+  behind: "Atras",
+  critical: "Critico",
+  no_goal: "Sem meta",
+};
 
 export default function ProductOverviewPage({
   params,
@@ -36,21 +56,22 @@ export default function ProductOverviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const [days, setDays] = useState<number>(7);
   const queryClient = useQueryClient();
 
   const product = useQuery({
     queryKey: ["product", id],
     queryFn: () => api.getProduct(id),
   });
-  const waterfall = useQuery({
-    queryKey: ["analytics", "waterfall", id],
-    queryFn: () => api.profitWaterfall(id, 7),
+  const pulse = useQuery({
+    queryKey: ["analytics", "pulse", id, days],
+    queryFn: () => api.pulse(id, days),
     refetchInterval: 5 * 60_000,
   });
-  const volume = useQuery({
-    queryKey: ["analytics", "volume", id],
-    queryFn: () => api.creativeVolumeScore(id),
-    refetchInterval: 10 * 60_000,
+  const heroKpis = useQuery({
+    queryKey: ["analytics", "hero-kpis", id, days],
+    queryFn: () => api.heroKpis(id, days),
+    refetchInterval: 5 * 60_000,
   });
   const decisions = useQuery({
     queryKey: ["analytics", "decisions", id],
@@ -90,29 +111,33 @@ export default function ProductOverviewPage({
     },
   });
 
-  const productData = productData_extract(product.data);
-
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        {productData?.supervisedMode ? (
-          <div className="text-sm px-4 py-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-3">
-            <span className="font-medium">SUPERVISED MODE ON</span>
-            <span className="text-amber-400/80">
-              agente coleta+sugere mas não muda nada no Meta.
-            </span>
-          </div>
-        ) : (
-          <div />
-        )}
-        <div className="flex gap-2">
-          <CeoReportButton productId={id} />
+      {/* Topo: Pulse line + acoes */}
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="flex-1 min-w-[280px]">
+          {pulse.data ? (
+            <PulseLine
+              tone={pulse.data.tone}
+              message={pulse.data.message}
+              detail={pulse.data.detail}
+            />
+          ) : (
+            <div className="rounded-lg border border-border bg-card h-[60px] animate-pulse" />
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <PeriodPicker value={days} onChange={setDays} />
+          <CeoReportButton productId={id} days={days} />
           <EmergencyStopButton productId={id} />
         </div>
       </div>
 
-      {/* Hero KPIs */}
-      <HeroKpis waterfall={waterfall.data} volume={volume.data} loading={waterfall.isLoading} />
+      {/* Hero KPIs primarios */}
+      <HeroKpisGrid data={heroKpis.data} loading={heroKpis.isLoading} group="primary" />
+
+      {/* Hero KPIs secundarios (Sobral way) */}
+      <HeroKpisGrid data={heroKpis.data} loading={heroKpis.isLoading} group="secondary" />
 
       {/* Pacing + Mismatches (Roadmap Sobral 1, 2) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -134,15 +159,16 @@ export default function ProductOverviewPage({
           productId={id}
           heartbeat={heartbeats.data?.heartbeats.find(h => h.productId === id)}
           loading={heartbeats.isLoading}
+          supervisedMode={!!product.data?.product?.supervisedMode}
         />
       </div>
 
       {/* 4 charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartCard productId={id} metric="cpa" title="CPA" subtitle="ideal: estável ou caindo" format="brl" />
-        <ChartCard productId={id} metric="roas" title="ROAS" subtitle="meta: ≥ 1.6x sustentado" format="x" />
-        <ChartCard productId={id} metric="sales" title="Vendas/dia" subtitle="atribuição Kirvano webhook" format="num" type="bar" />
-        <ChartCard productId={id} metric="spend" title="Gasto/dia" subtitle="vs target diário do produto" format="brl" type="bar" />
+        <ChartCard productId={id} metric="cpa" title="CPA" subtitle="ideal: estavel ou caindo" format="brl" days={Math.max(days, 14)} />
+        <ChartCard productId={id} metric="roas" title="ROAS" subtitle="meta: >= 1.6x sustentado" format="x" days={Math.max(days, 14)} />
+        <ChartCard productId={id} metric="sales" title="Vendas/dia" subtitle="atribuicao Kirvano webhook" format="num" type="bar" days={Math.max(days, 14)} />
+        <ChartCard productId={id} metric="spend" title="Gasto/dia" subtitle="vs target diario do produto" format="brl" type="bar" days={Math.max(days, 14)} />
       </div>
 
       {/* Decision Queue resumido + Recent actions */}
@@ -154,11 +180,62 @@ export default function ProductOverviewPage({
   );
 }
 
-function productData_extract(d: { product?: { supervisedMode: boolean } } | undefined) {
-  return d?.product;
+// ─── Hero KPIs (primary + secondary) ────────────────────────────────
+
+function HeroKpisGrid({
+  data,
+  loading,
+  group,
+}: {
+  data: HeroKpisResponse | undefined;
+  loading: boolean;
+  group: "primary" | "secondary";
+}) {
+  if (loading || !data) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-24 bg-card border border-border rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+  const items = group === "primary" ? data.primary : data.secondary;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {items.map(kpi => (
+        <KpiCard
+          key={kpi.key}
+          label={kpi.label}
+          value={formatHeroValue(kpi)}
+          delta={kpi.delta}
+          deltaDirection={kpi.direction}
+          hint={group === "secondary" ? kpi.hint : undefined}
+          size={group === "secondary" ? "sm" : "md"}
+        />
+      ))}
+    </div>
+  );
 }
 
-// ─── Freio de Mão ──────────────────────────────────────────────────
+function formatHeroValue(kpi: HeroKpiItem): string {
+  if (kpi.value == null || !Number.isFinite(kpi.value)) return "—";
+  switch (kpi.unit) {
+    case "BRL":
+      return formatBRL(kpi.value);
+    case "INT":
+      return formatNumber(Math.round(kpi.value));
+    case "PCT":
+      return `${kpi.value.toFixed(2)}%`;
+    case "RATIO":
+      return kpi.value > 0 ? `${kpi.value.toFixed(2)}x` : "—";
+    case "FLOAT":
+    default:
+      return kpi.value.toFixed(2);
+  }
+}
+
+// ─── Freio de Mao ──────────────────────────────────────────────────
 
 function EmergencyStopButton({ productId }: { productId: string }) {
   const queryClient = useQueryClient();
@@ -173,6 +250,7 @@ function EmergencyStopButton({ productId }: { productId: string }) {
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
       queryClient.invalidateQueries({ queryKey: ["actions", productId] });
       queryClient.invalidateQueries({ queryKey: ["campaigns", productId] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "pulse", productId] });
     },
   });
 
@@ -180,10 +258,10 @@ function EmergencyStopButton({ productId }: { productId: string }) {
     <>
       <button
         onClick={() => setConfirming(true)}
-        className="text-sm px-3 py-2 bg-destructive/10 text-destructive border border-destructive/40 rounded-md font-medium hover:bg-destructive/20 transition-colors flex items-center gap-2"
+        className="text-xs px-3 py-1.5 bg-destructive/10 text-destructive border border-destructive/40 rounded-md font-medium hover:bg-destructive/20 transition-colors"
         title="Para o agente + pausa todas campanhas no Meta"
       >
-        🛑 Freio de Mão
+        Freio de mao
       </button>
 
       {confirming && (
@@ -194,14 +272,14 @@ function EmergencyStopButton({ productId }: { productId: string }) {
           }}
         >
           <div className="bg-card border border-destructive/40 rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-medium text-destructive mb-2">🛑 Acionar Freio de Mão?</h3>
+            <h3 className="text-lg font-medium text-destructive mb-2">Acionar freio de mao?</h3>
             <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
               Isso vai fazer 3 coisas:
             </p>
             <ul className="text-sm text-muted-foreground space-y-1 mb-4 ml-4">
               <li>• Ligar <strong>supervisedMode</strong> (agente para de mexer em pause/scale)</li>
               <li>• <strong>Pausar todas as campanhas</strong> whitelisted no Meta Ads</li>
-              <li>• Disparar alerta crítico no WhatsApp</li>
+              <li>• Disparar alerta critico no WhatsApp</li>
             </ul>
             <p className="text-xs text-muted-foreground mb-4 italic">
               Reverter: ativa campanhas no Meta + desliga supervisedMode em /config.
@@ -219,7 +297,7 @@ function EmergencyStopButton({ productId }: { productId: string }) {
                 disabled={stop.isPending}
                 className="text-sm px-3 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 disabled:opacity-50"
               >
-                {stop.isPending ? "parando..." : "🛑 Acionar Freio"}
+                {stop.isPending ? "parando..." : "acionar freio"}
               </button>
             </div>
           </div>
@@ -234,7 +312,7 @@ function EmergencyStopButton({ productId }: { productId: string }) {
           }}
         >
           <div className="bg-card border border-success/40 rounded-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-medium text-success mb-3">🛑 Freio acionado</h3>
+            <h3 className="text-lg font-medium text-success mb-3">Freio acionado</h3>
             <ul className="text-sm space-y-1.5 mb-4">
               <li className={result.supervisedModeSet ? "text-success" : "text-muted-foreground"}>
                 {result.supervisedModeSet ? "✓" : "✗"} supervisedMode = true
@@ -262,15 +340,15 @@ function EmergencyStopButton({ productId }: { productId: string }) {
   );
 }
 
-// ─── Botão Relatório CEO + modal ────────────────────────────────────
+// ─── Botao Relatorio CEO + modal ────────────────────────────────────
 
-function CeoReportButton({ productId }: { productId: string }) {
+function CeoReportButton({ productId, days }: { productId: string; days: number }) {
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState<CeoReportResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
   const generate = useMutation({
-    mutationFn: () => api.ceoReport(productId, 7),
+    mutationFn: () => api.ceoReport(productId, days),
     onSuccess: data => {
       setReport(data);
       setOpen(true);
@@ -293,9 +371,9 @@ function CeoReportButton({ productId }: { productId: string }) {
       <button
         onClick={() => generate.mutate()}
         disabled={generate.isPending}
-        className="text-sm px-3 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+        className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
       >
-        {generate.isPending ? "gerando..." : "📊 Relatório CEO"}
+        {generate.isPending ? "gerando..." : "Relatorio CEO"}
       </button>
 
       {open && report && (
@@ -308,14 +386,14 @@ function CeoReportButton({ productId }: { productId: string }) {
           <div className="bg-card border border-border rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border">
               <h3 className="text-base font-medium">
-                Relatório CEO — {report.productName}
+                Relatorio CEO — {report.productName}
               </h3>
               <div className="flex gap-2">
                 <button
                   onClick={copyToClipboard}
                   className="text-xs px-3 py-1.5 bg-muted hover:bg-muted/70 rounded transition-colors"
                 >
-                  {copied ? "✓ copiado" : "copiar markdown"}
+                  {copied ? "copiado" : "copiar markdown"}
                 </button>
                 <button
                   onClick={() => setOpen(false)}
@@ -347,146 +425,7 @@ function CeoReportButton({ productId }: { productId: string }) {
   );
 }
 
-// ─── Hero ───────────────────────────────────────────────────────────
-
-function HeroKpis({
-  waterfall,
-  volume,
-  loading,
-}: {
-  waterfall: ProfitWaterfallResponse | undefined;
-  volume: CreativeVolumeScoreResponse | undefined;
-  loading: boolean;
-}) {
-  if (loading || !waterfall) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-24 bg-card border border-border rounded-lg animate-pulse" />
-        ))}
-      </div>
-    );
-  }
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-      <BigKpi
-        label="Gasto 7d"
-        value={formatBRL(waterfall.spend)}
-        delta={null}
-      />
-      <BigKpi
-        label="Vendas 7d"
-        value={formatNumber(waterfall.approvedSales)}
-        delta={waterfall.delta.salesPct}
-      />
-      <BigKpi
-        label="CPA 7d"
-        value={
-          waterfall.approvedSales > 0
-            ? formatBRL(waterfall.spend / waterfall.approvedSales)
-            : "—"
-        }
-        delta={null}
-      />
-      <BigKpi
-        label="ROAS 7d"
-        value={waterfall.roas ? `${waterfall.roas.toFixed(2)}x` : "—"}
-        tone={
-          waterfall.roas
-            ? waterfall.roas >= 2
-              ? "success"
-              : waterfall.roas < 1.4
-                ? "danger"
-                : undefined
-            : undefined
-        }
-      />
-      <BigKpi
-        label="Profit 7d"
-        value={formatBRL(waterfall.contributionMargin)}
-        delta={waterfall.delta.cmPct}
-        tone={
-          waterfall.contributionMargin > 0
-            ? "success"
-            : waterfall.contributionMargin < 0
-              ? "danger"
-              : undefined
-        }
-        emphasis
-      />
-      <BigKpi
-        label="Score"
-        value={volume ? `${volume.totalScore}` : "—"}
-        hint={volume?.grade}
-        tone={
-          volume?.grade === "elite"
-            ? "success"
-            : volume?.grade === "critico"
-              ? "danger"
-              : undefined
-        }
-      />
-    </div>
-  );
-}
-
-function BigKpi({
-  label,
-  value,
-  delta,
-  hint,
-  tone,
-  emphasis,
-}: {
-  label: string;
-  value: string;
-  delta?: number | null;
-  hint?: string;
-  tone?: "success" | "danger";
-  emphasis?: boolean;
-}) {
-  return (
-    <div
-      className={`bg-card border rounded-lg px-4 py-3 ${
-        emphasis ? "border-primary/40" : "border-border"
-      }`}
-    >
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div
-        className={`mt-1 font-heading tabular-nums ${
-          emphasis ? "text-2xl font-semibold" : "text-xl font-medium"
-        } ${tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : ""}`}
-      >
-        {value}
-      </div>
-      {delta !== null && delta !== undefined && (
-        <div
-          className={`text-[10px] mt-0.5 tabular-nums ${
-            delta > 0 ? "text-success" : delta < 0 ? "text-destructive" : "text-muted-foreground"
-          }`}
-        >
-          {delta > 0 ? "+" : ""}
-          {delta.toFixed(0)}% vs 7d ant.
-        </div>
-      )}
-      {hint && (
-        <div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">
-          {hint}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Pacing Mensal ──────────────────────────────────────────────────
-
-const PACE_STATUS_META: Record<PaceStatus, { label: string; cls: string; emoji: string }> = {
-  ahead: { label: "Adiante da meta", cls: "text-success", emoji: "🟢" },
-  on_track: { label: "No ritmo", cls: "text-emerald-400", emoji: "🔵" },
-  behind: { label: "Atrás da meta", cls: "text-yellow-500", emoji: "🟡" },
-  critical: { label: "CRÍTICO", cls: "text-destructive", emoji: "🔴" },
-  no_goal: { label: "Sem meta cadastrada", cls: "text-muted-foreground", emoji: "⚪" },
-};
 
 function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
   return (
@@ -495,11 +434,11 @@ function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; 
         <div>
           <h2 className="text-base font-medium">Pacing mensal</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Sobral: meta mensal direciona quão agressivo escalar.
+            Sobral: meta mensal direciona quao agressivo escalar.
           </p>
         </div>
         {data && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground tabular-nums">
             D{data.dayOfMonth}/{data.daysInMonth}
           </span>
         )}
@@ -508,12 +447,12 @@ function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; 
         <SkeletonLines lines={3} />
       ) : data.status === "no_goal" ? (
         <div className="text-sm text-muted-foreground">
-          Sem MonthlyGoal cadastrada pra {data.month}. Cadastre em <strong>/config</strong> pra
-          o agente ajustar threshold de scale dinamicamente.
+          Sem meta cadastrada para {data.month}. Cadastre em <strong>/config</strong> para o agente
+          ajustar threshold de scale dinamicamente.
         </div>
       ) : (
         <>
-          <div className="flex items-baseline gap-3">
+          <div className="flex items-baseline gap-3 flex-wrap">
             <div className="text-3xl font-heading font-semibold tabular-nums">
               {data.currentSales}
               <span className="text-base text-muted-foreground font-normal">
@@ -521,21 +460,16 @@ function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; 
                 / {data.targetSales}
               </span>
             </div>
-            <div className={`text-sm ${PACE_STATUS_META[data.status].cls}`}>
-              {PACE_STATUS_META[data.status].emoji} {PACE_STATUS_META[data.status].label}
-            </div>
+            <StatusBadge tone={PACE_TONE[data.status]} label={PACE_LABEL[data.status]} dot />
           </div>
-          {/* Barra de progresso */}
           <div className="h-2 bg-muted rounded-full overflow-hidden mt-3">
             <div
               className={`h-full ${
-                data.status === "ahead"
+                data.status === "ahead" || data.status === "on_track"
                   ? "bg-success"
-                  : data.status === "on_track"
-                    ? "bg-emerald-500"
-                    : data.status === "behind"
-                      ? "bg-yellow-500"
-                      : "bg-destructive"
+                  : data.status === "behind"
+                    ? "bg-warning"
+                    : "bg-destructive"
               }`}
               style={{
                 width: `${Math.min(100, ((data.currentSales / (data.targetSales || 1)) * 100))}%`,
@@ -562,7 +496,7 @@ function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; 
             <div className="text-[11px] text-muted-foreground mt-3 italic">
               Agente ajustou threshold de scale em ×{data.scaleThresholdAdjust.toFixed(2)} —{" "}
               {data.scaleThresholdAdjust > 1
-                ? "mais agressivo (atrás da meta)"
+                ? "mais agressivo (atras da meta)"
                 : "mais conservador (adiante)"}
               .
             </div>
@@ -586,9 +520,9 @@ function MismatchesCard({
     <section className="bg-card border border-border rounded-lg p-5 h-full">
       <div className="flex items-baseline justify-between gap-3 mb-3">
         <div>
-          <h2 className="text-base font-medium">Awareness × Audiência (Schwartz)</h2>
+          <h2 className="text-base font-medium">Awareness x Audiencia (Schwartz)</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Cold ≠ product-aware. Copy avançada em audiência fria explode CPA.
+            Cold ≠ product-aware. Copy avancada em audiencia fria explode CPA.
           </p>
         </div>
       </div>
@@ -597,32 +531,16 @@ function MismatchesCard({
       ) : (
         <>
           <div className="grid grid-cols-4 gap-2 text-center">
-            <SeverityChip
-              label="Ideal"
-              value={data.bySeverity.ideal}
-              cls="bg-success/10 text-success border-success/30"
-            />
-            <SeverityChip
-              label="OK"
-              value={data.bySeverity.ok}
-              cls="bg-muted/40 text-muted-foreground border-border"
-            />
-            <SeverityChip
-              label="Warn"
-              value={data.bySeverity.warn}
-              cls="bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
-            />
-            <SeverityChip
-              label="Mismatch"
-              value={data.bySeverity.mismatch}
-              cls="bg-destructive/10 text-destructive border-destructive/30"
-            />
+            <SeverityChip label="Ideal" value={data.bySeverity.ideal} tone="success" />
+            <SeverityChip label="OK" value={data.bySeverity.ok} tone="muted" />
+            <SeverityChip label="Atencao" value={data.bySeverity.warn} tone="warning" />
+            <SeverityChip label="Mismatch" value={data.bySeverity.mismatch} tone="danger" />
           </div>
           {data.items.length === 0 ? (
             <div className="text-sm text-muted-foreground mt-4">
               {data.bySeverity.untagged > 0
-                ? `${data.bySeverity.untagged} criativos sem tag — marque em /assets pra detectar mismatch.`
-                : "Nenhum mismatch detectado nos últimos 30d."}
+                ? `${data.bySeverity.untagged} criativos sem tag — marque em /assets para detectar mismatch.`
+                : "Nenhum mismatch detectado nos ultimos 30d."}
             </div>
           ) : (
             <div className="border border-border rounded mt-4">
@@ -642,9 +560,16 @@ function MismatchesCard({
   );
 }
 
-function SeverityChip({ label, value, cls }: { label: string; value: number; cls: string }) {
+function SeverityChip({ label, value, tone }: { label: string; value: number; tone: Tone }) {
+  const TONE_BG: Record<Tone, string> = {
+    success: "bg-success/10 text-success border-success/30",
+    warning: "bg-warning/10 text-warning border-warning/30",
+    danger: "bg-destructive/10 text-destructive border-destructive/30",
+    info: "bg-info/10 text-info border-info/30",
+    muted: "bg-muted/40 text-muted-foreground border-border",
+  };
   return (
-    <div className={`px-2 py-1.5 rounded border ${cls}`}>
+    <div className={`px-2 py-1.5 rounded border ${TONE_BG[tone]}`}>
       <div className="text-[10px] uppercase tracking-wider opacity-70">{label}</div>
       <div className="text-base font-medium tabular-nums">{value}</div>
     </div>
@@ -662,15 +587,7 @@ function MismatchRow({ item }: { item: CreativeMismatch }) {
           <span>{item.audience}</span> · CPA {item.cpa ? `R$${item.cpa.toFixed(0)}` : "—"}
         </div>
       </div>
-      <span
-        className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${
-          isGrave
-            ? "bg-destructive/10 text-destructive border-destructive/30"
-            : "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
-        }`}
-      >
-        {isGrave ? "GRAVE" : "warn"}
-      </span>
+      <StatusBadge size="sm" tone={isGrave ? "danger" : "warning"} label={isGrave ? "GRAVE" : "atencao"} />
     </div>
   );
 }
@@ -694,7 +611,7 @@ function BriefingCard({
         <div>
           <h2 className="text-base font-medium">Briefing executivo</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Gerado por IA cruzando profit, hit rate, fadiga, decisões.
+            Gerado por IA cruzando lucro, hit rate, fadiga, decisoes.
           </p>
         </div>
         <button
@@ -702,7 +619,7 @@ function BriefingCard({
           disabled={refreshing}
           className="text-xs px-2.5 py-1 bg-muted hover:bg-muted/70 rounded transition-colors shrink-0"
         >
-          {refreshing ? "..." : "regenerar"}
+          {refreshing ? "regenerando..." : "regenerar"}
         </button>
       </div>
       {loading || !data ? (
@@ -726,7 +643,6 @@ function BriefingCard({
 }
 
 function BriefingMarkdown({ text }: { text: string }) {
-  // Renderer mínimo de markdown: ## H2, **bold**, listas, parágrafos.
   const blocks = text.split(/\n\n+/);
   return (
     <>
@@ -764,7 +680,6 @@ function BriefingMarkdown({ text }: { text: string }) {
 }
 
 function InlineMarkdown({ text }: { text: string }) {
-  // **bold**
   const parts = text.split(/(\*\*[^*]+\*\*)/);
   return (
     <>
@@ -788,6 +703,7 @@ function AgentStatusCard({
   productId,
   heartbeat,
   loading,
+  supervisedMode,
 }: {
   productId: string;
   heartbeat:
@@ -799,6 +715,7 @@ function AgentStatusCard({
       }
     | undefined;
   loading: boolean;
+  supervisedMode: boolean;
 }) {
   const queryClient = useQueryClient();
   const runMutation = useMutation({
@@ -809,47 +726,46 @@ function AgentStatusCard({
     },
   });
 
-  const status = heartbeat
+  const tone: Tone = heartbeat
     ? heartbeat.consecutiveFailures >= 3
-      ? "down"
+      ? "danger"
       : heartbeat.consecutiveFailures > 0
-        ? "warn"
-        : "ok"
-    : "unknown";
-  const statusColor = {
-    ok: "bg-success",
-    warn: "bg-yellow-500",
-    down: "bg-destructive",
-    unknown: "bg-muted",
-  }[status];
+        ? "warning"
+        : "success"
+    : "muted";
 
   const sinceCollection = heartbeat?.lastCollectionAt
-    ? relativeTime(heartbeat.lastCollectionAt)
+    ? formatRelativeTime(heartbeat.lastCollectionAt)
     : "nunca";
 
   return (
     <section className="bg-card border border-border rounded-lg p-5 h-full">
       <div className="flex items-start justify-between gap-2 mb-3">
         <h2 className="text-base font-medium">Agente</h2>
-        <span className={`h-2.5 w-2.5 rounded-full ${statusColor}`} />
+        <StatusDot tone={tone} />
       </div>
+      {supervisedMode && (
+        <div className="mb-3">
+          <StatusBadge tone="warning" label="Modo supervisionado" dot size="sm" />
+        </div>
+      )}
       {loading ? (
         <SkeletonLines lines={3} />
       ) : (
         <dl className="space-y-2 text-sm">
-          <Row label="Última coleta" value={sinceCollection} />
+          <Row label="Ultima coleta" value={sinceCollection} />
           <Row
-            label="Última ação"
-            value={heartbeat?.lastAutomationAt ? relativeTime(heartbeat.lastAutomationAt) : "nenhuma"}
+            label="Ultima acao"
+            value={heartbeat?.lastAutomationAt ? formatRelativeTime(heartbeat.lastAutomationAt) : "nenhuma"}
           />
           <Row
             label="Status"
             value={
-              status === "ok"
-                ? "Saudável"
-                : status === "warn"
+              tone === "success"
+                ? "Saudavel"
+                : tone === "warning"
                   ? `${heartbeat?.consecutiveFailures} falha(s)`
-                  : status === "down"
+                  : tone === "danger"
                     ? "PARADO"
                     : "—"
             }
@@ -881,6 +797,7 @@ function ChartCard({
   subtitle,
   format,
   type = "line",
+  days = 14,
 }: {
   productId: string;
   metric: TimeseriesMetric;
@@ -888,15 +805,16 @@ function ChartCard({
   subtitle: string;
   format: "brl" | "num" | "x" | "pct";
   type?: "line" | "bar";
+  days?: number;
 }) {
   const q = useQuery({
-    queryKey: ["analytics", "ts", productId, metric],
-    queryFn: () => api.timeseries(productId, metric, 14),
+    queryKey: ["analytics", "ts", productId, metric, days],
+    queryFn: () => api.timeseries(productId, metric, days),
     refetchInterval: 5 * 60_000,
   });
 
   const data = q.data?.points.map(p => ({
-    date: p.date.slice(5), // MM-DD
+    date: p.date.slice(5),
     value: p.value,
   })) ?? [];
 
@@ -933,7 +851,7 @@ function ChartCard({
                 }`}
               >
                 {q.data.deltaPct > 0 ? "+" : ""}
-                {q.data.deltaPct.toFixed(0)}% vs média 7d
+                {q.data.deltaPct.toFixed(0)}% vs media 7d
               </div>
             )}
           </div>
@@ -1007,14 +925,14 @@ function DecisionQueuePreview({
 }) {
   return (
     <section className="bg-card border border-border rounded-lg p-5">
-      <h2 className="text-base font-medium">Próximas ações sugeridas</h2>
+      <h2 className="text-base font-medium">Proximas acoes sugeridas</h2>
       <p className="text-xs text-muted-foreground mt-0.5 mb-3">
-        Top 3 cruzando fadiga, hit rate, profit, awareness.
+        Top 3 cruzando fadiga, hit rate, lucro, awareness.
       </p>
       {loading || !data ? (
         <SkeletonLines lines={3} />
       ) : data.items.length === 0 ? (
-        <div className="text-sm text-muted-foreground">Sem ações priorizadas.</div>
+        <div className="text-sm text-muted-foreground">Sem acoes priorizadas.</div>
       ) : (
         <div className="space-y-2">
           {data.items.slice(0, 3).map((item, i) => (
@@ -1040,12 +958,12 @@ function RecentActionsCard({
 }) {
   return (
     <section className="bg-card border border-border rounded-lg p-5">
-      <h2 className="text-base font-medium">Últimas decisões do agente</h2>
+      <h2 className="text-base font-medium">Ultimas decisoes do agente</h2>
       <p className="text-xs text-muted-foreground mt-0.5 mb-3">8 mais recentes.</p>
       {loading ? (
         <SkeletonLines lines={4} />
       ) : actions.length === 0 ? (
-        <div className="text-sm text-muted-foreground">Nenhuma ação ainda.</div>
+        <div className="text-sm text-muted-foreground">Nenhuma acao ainda.</div>
       ) : (
         <div className="space-y-2">
           {actions.map(a => (
@@ -1053,7 +971,7 @@ function RecentActionsCard({
               <div className="flex justify-between gap-2">
                 <span className="font-mono text-primary">{a.action}</span>
                 <span className="text-muted-foreground tabular-nums shrink-0">
-                  {relativeTime(a.executedAt)}
+                  {formatRelativeTime(a.executedAt)}
                 </span>
               </div>
               {a.entityName && (
@@ -1090,16 +1008,5 @@ function SkeletonLines({ lines }: { lines: number }) {
       ))}
     </div>
   );
-}
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60_000);
-  if (min < 1) return "agora";
-  if (min < 60) return `${min}min atrás`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h atrás`;
-  const d = Math.floor(h / 24);
-  return `${d}d atrás`;
 }
 

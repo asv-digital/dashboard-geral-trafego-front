@@ -4,6 +4,9 @@ import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type CampaignListItem } from "@/lib/api";
 import { formatBRL, formatNumber } from "@/lib/format";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function CampaignsPage({
   params,
@@ -42,54 +45,155 @@ export default function CampaignsPage({
   });
 
   const campaigns = data?.campaigns ?? [];
+  const loading = pauseMutation.isPending || activateMutation.isPending;
+
+  const columns: Column<CampaignListItem>[] = [
+    {
+      key: "name",
+      label: "Nome",
+      sortable: true,
+      sortValue: c => c.name,
+      searchable: c => `${c.name} ${c.type} ${c.status}`,
+      exportValue: c => c.name,
+      render: c => (
+        <div className="font-medium flex items-center gap-2">
+          <span className="truncate">{c.name}</span>
+          {c.isASC && (
+            <StatusBadge
+              size="sm"
+              tone="info"
+              label="ASC"
+              className="shrink-0"
+            />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      label: "Tipo",
+      sortable: true,
+      sortValue: c => c.type,
+      exportValue: c => c.type,
+      render: c => <span className="text-muted-foreground text-xs">{c.type}</span>,
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      sortValue: c => c.status,
+      exportValue: c => c.status,
+      render: c => (
+        <div className="flex items-center gap-2">
+          <StatusBadge
+            size="sm"
+            tone={c.status === "Ativa" ? "success" : "muted"}
+            label={c.status}
+          />
+          {c.isInLearningPhase && (
+            <StatusBadge size="sm" tone="warning" label="Learning" />
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "dailyBudget",
+      label: "Budget/dia",
+      align: "right",
+      sortable: true,
+      sortValue: c => c.dailyBudget,
+      exportValue: c => c.dailyBudget,
+      render: c => formatBRL(c.dailyBudget),
+    },
+    {
+      key: "totalInvestment",
+      label: "Gasto total",
+      align: "right",
+      sortable: true,
+      sortValue: c => c.totalInvestment,
+      exportValue: c => c.totalInvestment,
+      render: c => formatBRL(c.totalInvestment),
+    },
+    {
+      key: "totalSales",
+      label: "Vendas",
+      align: "right",
+      sortable: true,
+      sortValue: c => c.totalSales,
+      exportValue: c => c.totalSales,
+      render: c => formatNumber(c.totalSales),
+    },
+    {
+      key: "cpa",
+      label: "CPA",
+      align: "right",
+      sortable: true,
+      sortValue: c => c.cpa ?? null,
+      exportValue: c => c.cpa,
+      render: c => (c.cpa ? formatBRL(c.cpa) : "—"),
+    },
+    {
+      key: "roas",
+      label: "ROAS",
+      align: "right",
+      sortable: true,
+      sortValue: c => c.roas ?? null,
+      exportValue: c => c.roas,
+      render: c => (c.roas ? `${c.roas.toFixed(2)}x` : "—"),
+    },
+    {
+      key: "actions",
+      label: "Acoes",
+      align: "right",
+      render: c =>
+        c.metaCampaignId ? (
+          c.status === "Ativa" ? (
+            <button
+              onClick={() => pauseMutation.mutate(c.metaCampaignId!)}
+              disabled={loading}
+              className="text-xs px-2 py-1 bg-muted hover:bg-muted/70 rounded transition-colors"
+            >
+              pausar
+            </button>
+          ) : (
+            <button
+              onClick={() => activateMutation.mutate(c.metaCampaignId!)}
+              disabled={loading}
+              className="text-xs px-2 py-1 bg-muted hover:bg-muted/70 rounded transition-colors"
+            >
+              ativar
+            </button>
+          )
+        ) : (
+          "—"
+        ),
+    },
+  ];
 
   return (
-    <div className="p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Campanhas</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Whitelist do agente — só campanhas aqui são geridas automaticamente.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Campanhas"
+        subtitle="Whitelist do agente — so campanhas aqui sao geridas automaticamente."
+      />
 
       {actionError && <div className="text-xs text-destructive">{actionError}</div>}
 
       {campaigns.length === 0 ? (
         <div className="border border-dashed border-border rounded-lg p-12 text-center">
-          <p className="text-muted-foreground text-sm">Nenhuma campanha whitelisted ainda</p>
+          <p className="text-muted-foreground text-sm">Nenhuma campanha whitelisted ainda.</p>
           <p className="text-muted-foreground/70 text-xs mt-1">
-            O primeiro launch cria a campanha no Meta e adiciona à whitelist
+            O primeiro launch cria a campanha no Meta e adiciona a whitelist.
           </p>
         </div>
       ) : (
-        <div className="border border-border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="text-left px-4 py-2.5">Nome</th>
-                <th className="text-left px-4 py-2.5">Tipo</th>
-                <th className="text-left px-4 py-2.5">Status</th>
-                <th className="text-right px-4 py-2.5">Budget/dia</th>
-                <th className="text-right px-4 py-2.5">Gasto (total)</th>
-                <th className="text-right px-4 py-2.5">Vendas</th>
-                <th className="text-right px-4 py-2.5">CPA</th>
-                <th className="text-right px-4 py-2.5">ROAS</th>
-                <th className="text-right px-4 py-2.5">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaigns.map(campaign => (
-                <CampaignRow
-                  key={campaign.id}
-                  campaign={campaign}
-                  onPause={metaCampaignId => pauseMutation.mutate(metaCampaignId)}
-                  onActivate={metaCampaignId => activateMutation.mutate(metaCampaignId)}
-                  loading={pauseMutation.isPending || activateMutation.isPending}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          data={campaigns}
+          keyOf={c => c.id}
+          exportFilename="campanhas.csv"
+          initialSort={{ key: "totalInvestment", dir: "desc" }}
+        />
       )}
     </div>
   );
@@ -98,7 +202,7 @@ export default function CampaignsPage({
 function extractMutationError(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === "account_inactive") {
-      return "Conta Meta bloqueando a ação agora.";
+      return "Conta Meta bloqueando a acao agora.";
     }
     if (error.code === "campaign_not_in_whitelist") {
       return "Campanha fora da whitelist do produto.";
@@ -106,86 +210,5 @@ function extractMutationError(error: unknown): string {
     return error.code;
   }
   if (error instanceof Error) return error.message;
-  return "falha ao executar ação no Meta";
-}
-
-function CampaignRow({
-  campaign,
-  onPause,
-  onActivate,
-  loading,
-}: {
-  campaign: CampaignListItem;
-  onPause: (metaCampaignId: string) => void;
-  onActivate: (metaCampaignId: string) => void;
-  loading: boolean;
-}) {
-  return (
-    <tr className="border-t border-border hover:bg-muted/20">
-      <td className="px-4 py-3 font-medium">
-        {campaign.name}
-        {campaign.isASC && (
-          <span
-            className="ml-2 text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/30"
-            title="Advantage+ Shopping Campaign — IA do Meta gerencia audiência/criativo/placement"
-          >
-            ASC
-          </span>
-        )}
-      </td>
-      <td className="px-4 py-3 text-muted-foreground text-xs">{campaign.type}</td>
-      <td className="px-4 py-3">
-        <span
-          className={
-            campaign.status === "Ativa"
-              ? "text-success text-xs"
-              : "text-muted-foreground text-xs"
-          }
-        >
-          {campaign.status}
-          {campaign.isInLearningPhase && (
-            <span className="ml-2 text-warning">· learning</span>
-          )}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {formatBRL(campaign.dailyBudget)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {formatBRL(campaign.totalInvestment)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {formatNumber(campaign.totalSales)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {campaign.cpa ? formatBRL(campaign.cpa) : "—"}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {campaign.roas ? `${campaign.roas.toFixed(2)}x` : "—"}
-      </td>
-      <td className="px-4 py-3 text-right">
-        {campaign.metaCampaignId && (
-          <>
-            {campaign.status === "Ativa" ? (
-              <button
-                onClick={() => onPause(campaign.metaCampaignId!)}
-                disabled={loading}
-                className="text-xs px-2 py-1 bg-muted hover:bg-muted/70 rounded transition-colors"
-              >
-                pausar
-              </button>
-            ) : (
-              <button
-                onClick={() => onActivate(campaign.metaCampaignId!)}
-                disabled={loading}
-                className="text-xs px-2 py-1 bg-muted hover:bg-muted/70 rounded transition-colors"
-              >
-                ativar
-              </button>
-            )}
-          </>
-        )}
-      </td>
-    </tr>
-  );
+  return "falha ao executar acao no Meta";
 }

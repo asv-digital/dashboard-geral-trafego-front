@@ -269,6 +269,16 @@ export interface SaleItem {
   updatedAt: string;
 }
 
+export interface GlobalPnlProductPrevious {
+  spend: number;
+  salesCount: number;
+  revenue: number;
+  grossRevenue: number;
+  profit: number;
+  cpa: number;
+  roas: number;
+}
+
 export interface GlobalPnlProduct {
   productId: string;
   slug: string;
@@ -283,6 +293,7 @@ export interface GlobalPnlProduct {
   profit: number;
   cpa: number;
   roas: number;
+  previous: GlobalPnlProductPrevious;
 }
 
 export interface GlobalPnlTotals {
@@ -296,6 +307,7 @@ export interface GlobalPnlResponse {
   days: number;
   products: GlobalPnlProduct[];
   totals: GlobalPnlTotals;
+  previousTotals: GlobalPnlTotals;
 }
 
 export interface ActivityItem extends ActionLogItem {
@@ -741,6 +753,10 @@ export const api = {
     request<AwarenessMismatchesResponse>(`/analytics/awareness-mismatches/${productId}${qs({ days })}`),
   ceoReport: (productId: string, days = 7) =>
     request<CeoReportResponse>(`/analytics/report-ceo/${productId}${qs({ days })}`),
+  pulse: (productId: string, days = 7) =>
+    request<PulseResponse>(`/analytics/pulse/${productId}${qs({ days })}`),
+  heroKpis: (productId: string, days = 7) =>
+    request<HeroKpisResponse>(`/analytics/hero-kpis/${productId}${qs({ days })}`),
 
   // High Ticket Sales (painel separado, manual)
   listHighTicketSales: (productId: string, days = 90) =>
@@ -768,6 +784,40 @@ export const api = {
       method: "POST",
     }),
 };
+
+export type PulseTone = "success" | "warning" | "danger" | "info" | "muted";
+
+export interface PulseResponse {
+  tone: PulseTone;
+  message: string;
+  detail: string;
+  signals: {
+    profit: number;
+    cpa: number;
+    sales: number;
+    paceRatio: number;
+    paceStatus: string;
+    fatiguedCreatives: number;
+    mismatches: number;
+    supervisedMode: boolean;
+  };
+}
+
+export interface HeroKpiItem {
+  key: string;
+  label: string;
+  value: number;
+  unit: "BRL" | "INT" | "FLOAT" | "PCT" | "RATIO";
+  delta: number | null;
+  direction: "up_good" | "down_good" | "neutral";
+  hint?: string;
+}
+
+export interface HeroKpisResponse {
+  windowDays: number;
+  primary: HeroKpiItem[];
+  secondary: HeroKpiItem[];
+}
 
 export interface HighTicketSaleInput {
   customerEmail: string;

@@ -8,6 +8,9 @@ import {
   type HighTicketSummaryResponse,
 } from "@/lib/api";
 import { formatBRL } from "@/lib/format";
+import { DataTable, type Column } from "@/components/ui/data-table";
+import { PageHeader, SectionHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 export default function HighTicketPage({
   params,
@@ -41,13 +44,10 @@ export default function HighTicketPage({
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">High Ticket (mentoria)</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Painel separado pra registrar vendas de high ticket vindas desse funil. Não influencia
-          decisões automáticas do agente — vive aqui só pra cálculo de ROI consolidado.
-        </p>
-      </header>
+      <PageHeader
+        title="High Ticket (mentoria)"
+        subtitle="Painel manual — registra vendas high ticket vindas deste funil. Nao influencia decisoes automaticas do agente, so consolida ROI."
+      />
 
       {/* Card resumo consolidado */}
       <SummaryCard data={summary.data} loading={summary.isLoading} />
@@ -82,7 +82,7 @@ export default function HighTicketPage({
       )}
 
       {/* Lista de vendas */}
-      <SalesList
+      <SalesTable
         items={list.data?.items ?? []}
         loading={list.isLoading}
         productId={id}
@@ -312,7 +312,7 @@ function Field({
 
 // ─── Lista ──────────────────────────────────────────────────────────
 
-function SalesList({
+function SalesTable({
   items,
   loading,
   productId,
@@ -336,67 +336,89 @@ function SalesList({
       <section className="border border-dashed border-border rounded-lg p-12 text-center">
         <p className="text-muted-foreground text-sm">Nenhuma venda high ticket registrada.</p>
         <p className="text-muted-foreground/70 text-xs mt-1">
-          Quando vender high ticket pra um buyer desse funil, registre aqui.
+          Quando vender high ticket para um buyer deste funil, registre aqui.
         </p>
       </section>
     );
   }
+
+  const columns: Column<HighTicketSaleItem>[] = [
+    {
+      key: "customerEmail",
+      label: "Email",
+      sortable: true,
+      sortValue: r => r.customerEmail,
+      searchable: r => `${r.customerEmail} ${r.notes ?? ""}`,
+      exportValue: r => r.customerEmail,
+      render: r => <span className="truncate inline-block max-w-[220px]">{r.customerEmail}</span>,
+    },
+    {
+      key: "saleDate",
+      label: "Data",
+      sortable: true,
+      sortValue: r => r.saleDate,
+      exportValue: r => r.saleDate.slice(0, 10),
+      render: r => <span className="text-muted-foreground text-xs">{r.saleDate.slice(0, 10)}</span>,
+    },
+    {
+      key: "amountGross",
+      label: "Valor",
+      align: "right",
+      sortable: true,
+      sortValue: r => r.amountGross,
+      exportValue: r => r.amountGross,
+      render: r => formatBRL(r.amountGross),
+    },
+    {
+      key: "match",
+      label: "Match",
+      sortable: true,
+      sortValue: r => (r.matchedSale ? 1 : 0),
+      exportValue: r => (r.matchedSale ? "matched" : "sem match"),
+      render: r =>
+        r.matchedSale ? (
+          <StatusBadge size="sm" tone="success" label="Matched" dot />
+        ) : (
+          <StatusBadge size="sm" tone="warning" label="Sem match" />
+        ),
+    },
+    {
+      key: "notes",
+      label: "Notas",
+      exportValue: r => r.notes,
+      render: r => (
+        <span className="text-xs text-muted-foreground truncate inline-block max-w-[200px]">
+          {r.notes || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "Acoes",
+      align: "right",
+      render: r => (
+        <button
+          onClick={() => {
+            if (confirm(`Apagar venda de ${r.customerEmail}?`)) del.mutate(r.id);
+          }}
+          className="text-xs text-destructive hover:underline"
+        >
+          apagar
+        </button>
+      ),
+    },
+  ];
+
   return (
     <section>
-      <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-        Vendas registradas ({items.length})
-      </h3>
-      <div className="border border-border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
-            <tr>
-              <th className="text-left px-4 py-2.5">Email</th>
-              <th className="text-left px-4 py-2.5">Data</th>
-              <th className="text-right px-4 py-2.5">Valor</th>
-              <th className="text-left px-4 py-2.5">Match</th>
-              <th className="text-left px-4 py-2.5">Notas</th>
-              <th className="text-right px-4 py-2.5">—</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map(item => (
-              <tr key={item.id} className="border-t border-border hover:bg-muted/20">
-                <td className="px-4 py-3 truncate max-w-[200px]">{item.customerEmail}</td>
-                <td className="px-4 py-3 text-muted-foreground text-xs tabular-nums">
-                  {item.saleDate.slice(0, 10)}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {formatBRL(item.amountGross)}
-                </td>
-                <td className="px-4 py-3">
-                  {item.matchedSale ? (
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-success/10 text-success border-success/30">
-                      ✓ matched
-                    </span>
-                  ) : (
-                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border bg-yellow-500/10 text-yellow-500 border-yellow-500/30">
-                      sem match
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-xs text-muted-foreground truncate max-w-[200px]">
-                  {item.notes || "—"}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => {
-                      if (confirm(`Apagar venda de ${item.customerEmail}?`)) del.mutate(item.id);
-                    }}
-                    className="text-xs text-destructive hover:underline"
-                  >
-                    apagar
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <SectionHeader title={`Vendas registradas (${items.length})`} />
+      <DataTable
+        columns={columns}
+        data={items}
+        keyOf={r => r.id}
+        exportFilename="high-ticket-sales.csv"
+        initialSort={{ key: "saleDate", dir: "desc" }}
+      />
     </section>
   );
 }

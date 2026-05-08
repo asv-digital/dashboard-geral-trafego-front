@@ -10,7 +10,19 @@ import {
   type HeartbeatItem,
   type ProductHealth,
 } from "@/lib/api";
-import { formatBRL, formatNumber } from "@/lib/format";
+import { calcDelta, formatBRL, formatNumber, formatRelativeTime } from "@/lib/format";
+import { KpiCard } from "@/components/ui/kpi-card";
+import { PageHeader, SectionHeader } from "@/components/ui/page-header";
+import { PeriodPicker } from "@/components/ui/period-picker";
+import { StatusBadge, StatusDot, type Tone } from "@/components/ui/status-badge";
+import { DataTable, type Column } from "@/components/ui/data-table";
+
+const HEALTH_TONE: Record<ProductHealth, { tone: Tone; label: string }> = {
+  elite: { tone: "success", label: "Saudavel" },
+  bom: { tone: "success", label: "Bom" },
+  mediano: { tone: "warning", label: "Atencao" },
+  critico: { tone: "danger", label: "Critico" },
+};
 
 export default function GlobalPage() {
   const [now, setNow] = useState(0);
@@ -49,38 +61,55 @@ export default function GlobalPage() {
   const topAlerts = overview?.topAlerts ?? [];
 
   const totals = pnl?.totals ?? { spend: 0, sales: 0, revenue: 0, profit: 0 };
+  const previousTotals = pnl?.previousTotals ?? {
+    spend: 0,
+    sales: 0,
+    revenue: 0,
+    profit: 0,
+  };
   const products = pnl?.products ?? [];
   const heartbeatItems = heartbeats?.heartbeats ?? [];
   const recentActivity = activity?.activity.slice(0, 20) ?? [];
 
   return (
-    <div className="p-8 space-y-8">
-      <header className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-heading font-semibold">Visão Geral</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Últimos {days} dias — todos os produtos
-          </p>
-        </div>
-        <PeriodPicker value={days} onChange={setDays} />
-      </header>
+    <div className="p-6 md:p-8 space-y-8">
+      <PageHeader
+        title="Visao Geral"
+        subtitle={`Ultimos ${days === 1 ? "1 dia" : `${days} dias`} · todos os produtos`}
+        actions={<PeriodPicker value={days} onChange={setDays} />}
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard label="Gasto" value={formatBRL(totals.spend)} />
-        <KpiCard label="Vendas" value={formatNumber(totals.sales)} />
-        <KpiCard label="Receita líquida" value={formatBRL(totals.revenue)} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard
+          label="Gasto"
+          value={formatBRL(totals.spend)}
+          delta={calcDelta(totals.spend, previousTotals.spend)}
+          deltaDirection="neutral"
+        />
+        <KpiCard
+          label="Vendas"
+          value={formatNumber(totals.sales)}
+          delta={calcDelta(totals.sales, previousTotals.sales)}
+          deltaDirection="up_good"
+        />
+        <KpiCard
+          label="Receita liquida"
+          value={formatBRL(totals.revenue)}
+          delta={calcDelta(totals.revenue, previousTotals.revenue)}
+          deltaDirection="up_good"
+        />
         <KpiCard
           label="Lucro"
           value={formatBRL(totals.profit)}
+          delta={calcDelta(totals.profit, previousTotals.profit)}
+          deltaDirection="up_good"
           tone={totals.profit >= 0 ? "success" : "danger"}
         />
       </div>
 
       {topAlerts.length > 0 && (
         <section>
-          <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-            Alertas ativos ({topAlerts.length})
-          </h2>
+          <SectionHeader title={`Alertas ativos (${topAlerts.length})`} />
           <div className="bg-card border border-destructive/30 rounded-lg overflow-hidden">
             {topAlerts.map((alert, i) => (
               <div
@@ -88,8 +117,8 @@ export default function GlobalPage() {
                 className="flex items-center justify-between px-4 py-2.5 border-b border-border last:border-b-0 text-sm gap-3"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
-                  <span className="text-muted-foreground text-xs uppercase tracking-wider shrink-0">
+                  <StatusDot tone="danger" />
+                  <span className="text-muted-foreground text-[10px] uppercase tracking-wider shrink-0">
                     {alert.productSlug}
                   </span>
                   <span className="truncate">{alert.type}</span>
@@ -102,9 +131,10 @@ export default function GlobalPage() {
       )}
 
       <section>
-        <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-          P&amp;L por produto
-        </h2>
+        <SectionHeader
+          title="P&L por produto"
+          hint={`${products.length} ${products.length === 1 ? "produto" : "produtos"}`}
+        />
         {products.length === 0 ? (
           <div className="border border-dashed border-border rounded-lg p-10 text-center">
             <p className="text-muted-foreground text-sm">
@@ -112,40 +142,13 @@ export default function GlobalPage() {
             </p>
           </div>
         ) : (
-          <div className="border border-border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
-                <tr>
-                  <th className="text-left px-4 py-2.5">Produto</th>
-                  <th className="text-left px-4 py-2.5">Stage</th>
-                  <th className="text-right px-4 py-2.5">Budget/dia</th>
-                  <th className="text-right px-4 py-2.5">Gasto</th>
-                  <th className="text-right px-4 py-2.5">Vendas</th>
-                  <th className="text-right px-4 py-2.5">Receita</th>
-                  <th className="text-right px-4 py-2.5">CPA</th>
-                  <th className="text-right px-4 py-2.5">ROAS</th>
-                  <th className="text-right px-4 py-2.5">Lucro</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map(product => (
-                  <ProductRow
-                    key={product.productId}
-                    product={product}
-                    health={healthMap.get(product.productId)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ProductsTable products={products} healthMap={healthMap} />
         )}
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section>
-          <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-            Heartbeats do agente
-          </h2>
+          <SectionHeader title="Heartbeats do agente" />
           <div className="bg-card border border-border rounded-lg divide-y divide-border">
             {heartbeatItems.length === 0 ? (
               <div className="p-5 text-xs text-muted-foreground">nenhum heartbeat</div>
@@ -162,14 +165,12 @@ export default function GlobalPage() {
         </section>
 
         <section>
-          <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-            Atividade recente (cross-product)
-          </h2>
+          <SectionHeader title="Atividade recente (cross-product)" />
           <div className="bg-card border border-border rounded-lg divide-y divide-border max-h-96 overflow-y-auto">
             {recentActivity.length === 0 ? (
               <div className="p-5 text-xs text-muted-foreground">sem atividade</div>
             ) : (
-              recentActivity.map(item => <ActivityRow key={item.id} item={item} />)
+              recentActivity.map(item => <ActivityRow key={item.id} item={item} now={now} />)
             )}
           </div>
         </section>
@@ -178,96 +179,157 @@ export default function GlobalPage() {
   );
 }
 
-const HEALTH_BADGE: Record<ProductHealth, { label: string; cls: string }> = {
-  elite: { label: "elite", cls: "bg-success/10 text-success border-success/30" },
-  bom: { label: "bom", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  mediano: { label: "mediano", cls: "bg-yellow-500/10 text-yellow-500 border-yellow-500/30" },
-  critico: { label: "crítico", cls: "bg-destructive/10 text-destructive border-destructive/30" },
-};
-
-function PeriodPicker({
-  value,
-  onChange,
+function ProductsTable({
+  products,
+  healthMap,
 }: {
-  value: number;
-  onChange: (v: number) => void;
+  products: GlobalPnlProduct[];
+  healthMap: Map<string, ProductHealth>;
 }) {
-  const options = [
-    { v: 1, label: "Hoje" },
-    { v: 7, label: "7d" },
-    { v: 14, label: "14d" },
-    { v: 30, label: "30d" },
-    { v: 60, label: "60d" },
-    { v: 90, label: "90d" },
+  const columns: Column<GlobalPnlProduct>[] = [
+    {
+      key: "name",
+      label: "Produto",
+      sortable: true,
+      sortValue: row => row.name,
+      searchable: row => `${row.name} ${row.slug} ${row.stage}`,
+      exportValue: row => row.name,
+      render: row => {
+        const health = healthMap.get(row.productId);
+        return (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/product/${row.productId}`}
+              className="font-medium hover:text-primary"
+            >
+              {row.name}
+            </Link>
+            {health && (
+              <StatusBadge
+                size="sm"
+                tone={HEALTH_TONE[health].tone}
+                label={HEALTH_TONE[health].label}
+                dot
+              />
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: "stage",
+      label: "Stage",
+      sortable: true,
+      sortValue: row => row.stage,
+      exportValue: row => row.stage,
+      render: row => <span className="text-muted-foreground text-xs">{row.stage}</span>,
+    },
+    {
+      key: "dailyBudgetTarget",
+      label: "Budget/dia",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.dailyBudgetTarget,
+      exportValue: row => row.dailyBudgetTarget,
+      render: row => formatBRL(row.dailyBudgetTarget),
+    },
+    {
+      key: "spend",
+      label: "Gasto",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.spend,
+      exportValue: row => row.spend,
+      render: row => <DeltaCell value={formatBRL(row.spend)} delta={calcDelta(row.spend, row.previous.spend)} direction="neutral" />,
+    },
+    {
+      key: "salesCount",
+      label: "Vendas",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.salesCount,
+      exportValue: row => row.salesCount,
+      render: row => <DeltaCell value={formatNumber(row.salesCount)} delta={calcDelta(row.salesCount, row.previous.salesCount)} direction="up_good" />,
+    },
+    {
+      key: "revenue",
+      label: "Receita",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.revenue,
+      exportValue: row => row.revenue,
+      render: row => formatBRL(row.revenue),
+    },
+    {
+      key: "cpa",
+      label: "CPA",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.cpa,
+      exportValue: row => row.cpa,
+      render: row => row.cpa > 0 ? <DeltaCell value={formatBRL(row.cpa)} delta={calcDelta(row.cpa, row.previous.cpa)} direction="down_good" /> : "—",
+    },
+    {
+      key: "roas",
+      label: "ROAS",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.roas,
+      exportValue: row => row.roas,
+      render: row => row.roas > 0 ? `${row.roas.toFixed(2)}x` : "—",
+    },
+    {
+      key: "profit",
+      label: "Lucro",
+      align: "right",
+      sortable: true,
+      sortValue: row => row.profit,
+      exportValue: row => row.profit,
+      render: row => (
+        <span className={row.profit >= 0 ? "text-success" : "text-destructive"}>
+          {formatBRL(row.profit)}
+        </span>
+      ),
+    },
   ];
+
   return (
-    <div className="flex gap-1 border border-border rounded-lg p-1 bg-card">
-      {options.map(opt => (
-        <button
-          key={opt.v}
-          onClick={() => onChange(opt.v)}
-          className={`text-xs px-3 py-1.5 rounded transition-colors ${
-            value === opt.v
-              ? "bg-primary text-primary-foreground font-medium"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
+    <DataTable
+      columns={columns}
+      data={products}
+      keyOf={row => row.productId}
+      exportFilename="pnl-produtos.csv"
+      initialSort={{ key: "profit", dir: "desc" }}
+    />
   );
 }
 
-function ProductRow({
-  product,
-  health,
+function DeltaCell({
+  value,
+  delta,
+  direction,
 }: {
-  product: GlobalPnlProduct;
-  health?: ProductHealth;
+  value: string;
+  delta: number | null;
+  direction: "up_good" | "down_good" | "neutral";
 }) {
+  if (delta == null || !Number.isFinite(delta)) {
+    return <span>{value}</span>;
+  }
+  const tone: Tone =
+    direction === "neutral"
+      ? "muted"
+      : direction === "up_good"
+        ? delta >= 0 ? "success" : "danger"
+        : delta <= 0 ? "success" : "danger";
+  const sign = delta > 0 ? "+" : "";
+  const toneCls =
+    tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : "text-muted-foreground";
   return (
-    <tr className="border-t border-border hover:bg-muted/20">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/product/${product.productId}`}
-            className="font-medium hover:text-primary"
-          >
-            {product.name}
-          </Link>
-          {health && (
-            <span
-              className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${HEALTH_BADGE[health].cls}`}
-            >
-              {HEALTH_BADGE[health].label}
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-4 py-3 text-muted-foreground text-xs">{product.stage}</td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {formatBRL(product.dailyBudgetTarget)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">{formatBRL(product.spend)}</td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {formatNumber(product.salesCount)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">{formatBRL(product.revenue)}</td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {product.cpa > 0 ? formatBRL(product.cpa) : "—"}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums">
-        {product.roas > 0 ? `${product.roas.toFixed(2)}x` : "—"}
-      </td>
-      <td
-        className={`px-4 py-3 text-right tabular-nums ${
-          product.profit >= 0 ? "text-success" : "text-destructive"
-        }`}
-      >
-        {formatBRL(product.profit)}
-      </td>
-    </tr>
+    <div className="flex flex-col items-end leading-tight">
+      <span>{value}</span>
+      <span className={`text-[9px] tabular-nums ${toneCls}`}>{sign}{delta.toFixed(1)}%</span>
+    </div>
   );
 }
 
@@ -286,7 +348,7 @@ function HeartbeatRow({
       ? (now - lastCollection.getTime()) / (1000 * 60 * 60)
       : null;
 
-  const tone =
+  const tone: Tone =
     hoursSince === null
       ? "muted"
       : hoursSince > 8
@@ -303,69 +365,29 @@ function HeartbeatRow({
           {lastCollection
             ? hoursSince === null
               ? "calculando…"
-              : `há ${hoursSince.toFixed(1)}h`
+              : formatRelativeTime(lastCollection, now)
             : "nunca coletou"}
           {heartbeat.consecutiveFailures > 0 &&
             ` · ${heartbeat.consecutiveFailures} falhas`}
         </div>
       </div>
-      <span
-        className={
-          tone === "success"
-            ? "text-success"
-            : tone === "warning"
-              ? "text-warning"
-              : tone === "danger"
-                ? "text-destructive"
-                : "text-muted-foreground"
-        }
-      >
-        ●
-      </span>
+      <StatusDot tone={tone} />
     </div>
   );
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
+function ActivityRow({ item, now }: { item: ActivityItem; now: number }) {
   return (
     <div className="p-3 text-xs">
       <div className="flex items-center justify-between gap-2">
         <span className="font-mono text-primary">{item.action}</span>
         <span className="text-muted-foreground">
-          {new Date(item.executedAt).toLocaleString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          {formatRelativeTime(item.executedAt, now)}
         </span>
       </div>
       <div className="text-muted-foreground mt-1">
         {item.product?.slug ?? "sem-produto"} · {item.entityName || item.entityType}
         {item.details ? ` — ${item.details}` : ""}
-      </div>
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "success" | "danger";
-}) {
-  return (
-    <div className="bg-card border border-border rounded-lg p-5">
-      <div className="text-xs uppercase text-muted-foreground tracking-wider">{label}</div>
-      <div
-        className={`text-2xl font-heading font-semibold mt-2 tabular-nums ${
-          tone === "success" ? "text-success" : tone === "danger" ? "text-destructive" : ""
-        }`}
-      >
-        {value}
       </div>
     </div>
   );

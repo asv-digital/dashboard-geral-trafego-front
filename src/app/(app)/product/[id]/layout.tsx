@@ -11,6 +11,7 @@ const TABS = [
   { slug: "", label: "Visão geral" },
   { slug: "realtime", label: "Tempo real" },
   { slug: "alerts", label: "Alertas" },
+  { slug: "high-ticket", label: "High Ticket" },
   { slug: "analytics", label: "Analytics" },
   { slug: "method", label: "Método" },
   { slug: "funnel", label: "Funil" },

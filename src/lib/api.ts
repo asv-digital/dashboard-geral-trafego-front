@@ -741,7 +741,81 @@ export const api = {
     request<AwarenessMismatchesResponse>(`/analytics/awareness-mismatches/${productId}${qs({ days })}`),
   ceoReport: (productId: string, days = 7) =>
     request<CeoReportResponse>(`/analytics/report-ceo/${productId}${qs({ days })}`),
+
+  // High Ticket Sales (painel separado, manual)
+  listHighTicketSales: (productId: string, days = 90) =>
+    request<{ items: HighTicketSaleItem[] }>(`/products/${productId}/high-ticket-sales${qs({ days })}`),
+  highTicketSummary: (productId: string, days = 90) =>
+    request<HighTicketSummaryResponse>(`/products/${productId}/high-ticket-sales/summary${qs({ days })}`),
+  createHighTicketSale: (productId: string, data: HighTicketSaleInput) =>
+    request<HighTicketSaleItem>(`/products/${productId}/high-ticket-sales`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteHighTicketSale: (productId: string, id: string) =>
+    request<{ ok: boolean }>(`/products/${productId}/high-ticket-sales/${id}`, {
+      method: "DELETE",
+    }),
+  syncHighTicketSales: (productId: string) =>
+    request<{ total: number; matched: number; unmatched: number }>(
+      `/products/${productId}/high-ticket-sales/sync`,
+      { method: "POST" }
+    ),
+
+  // Freio de Mão
+  emergencyStop: (productId: string) =>
+    request<EmergencyStopResponse>(`/products/${productId}/emergency-stop`, {
+      method: "POST",
+    }),
 };
+
+export interface HighTicketSaleInput {
+  customerEmail: string;
+  amountGross: number;
+  saleDate: string; // ISO
+  notes?: string;
+}
+
+export interface HighTicketSaleItem {
+  id: string;
+  productId: string;
+  customerEmail: string;
+  amountGross: number;
+  saleDate: string;
+  notes: string | null;
+  matchedSaleId: string | null;
+  syncedAt: string | null;
+  createdAt: string;
+  matchedSale: {
+    id: string;
+    date: string;
+    amountGross: number;
+    customerEmail: string | null;
+  } | null;
+}
+
+export interface HighTicketSummaryResponse {
+  windowDays: number;
+  spend: number;
+  lowTickets: { count: number; revenue: number };
+  highTickets: { count: number; revenue: number };
+  totalRevenue: number;
+  netProfit: number;
+  uniqueCustomers: number;
+  avgLtvPerCustomer: number;
+  conversionLowToHigh: number;
+  consolidatedROI: number | null;
+  matchedCount: number;
+  unmatchedCount: number;
+}
+
+export interface EmergencyStopResponse {
+  productId: string;
+  supervisedModeSet: boolean;
+  campaignsPaused: number;
+  campaignsFailed: number;
+  notificationSent: boolean;
+}
 
 export interface CeoReportResponse {
   productId: string;

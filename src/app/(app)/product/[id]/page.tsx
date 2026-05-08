@@ -22,6 +22,7 @@ import {
   type CreativeMismatch,
   type CreativeVolumeScoreResponse,
   type DecisionQueueResponse,
+  type EmergencyStopResponse,
   type MonthlyPaceResponse,
   type PaceStatus,
   type ProfitWaterfallResponse,
@@ -104,7 +105,10 @@ export default function ProductOverviewPage({
         ) : (
           <div />
         )}
-        <CeoReportButton productId={id} />
+        <div className="flex gap-2">
+          <CeoReportButton productId={id} />
+          <EmergencyStopButton productId={id} />
+        </div>
       </div>
 
       {/* Hero KPIs */}
@@ -152,6 +156,110 @@ export default function ProductOverviewPage({
 
 function productData_extract(d: { product?: { supervisedMode: boolean } } | undefined) {
   return d?.product;
+}
+
+// ─── Freio de Mão ──────────────────────────────────────────────────
+
+function EmergencyStopButton({ productId }: { productId: string }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [result, setResult] = useState<EmergencyStopResponse | null>(null);
+
+  const stop = useMutation({
+    mutationFn: () => api.emergencyStop(productId),
+    onSuccess: r => {
+      setResult(r);
+      setConfirming(false);
+      queryClient.invalidateQueries({ queryKey: ["product", productId] });
+      queryClient.invalidateQueries({ queryKey: ["actions", productId] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns", productId] });
+    },
+  });
+
+  return (
+    <>
+      <button
+        onClick={() => setConfirming(true)}
+        className="text-sm px-3 py-2 bg-destructive/10 text-destructive border border-destructive/40 rounded-md font-medium hover:bg-destructive/20 transition-colors flex items-center gap-2"
+        title="Para o agente + pausa todas campanhas no Meta"
+      >
+        🛑 Freio de Mão
+      </button>
+
+      {confirming && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={e => {
+            if (e.target === e.currentTarget) setConfirming(false);
+          }}
+        >
+          <div className="bg-card border border-destructive/40 rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-medium text-destructive mb-2">🛑 Acionar Freio de Mão?</h3>
+            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+              Isso vai fazer 3 coisas:
+            </p>
+            <ul className="text-sm text-muted-foreground space-y-1 mb-4 ml-4">
+              <li>• Ligar <strong>supervisedMode</strong> (agente para de mexer em pause/scale)</li>
+              <li>• <strong>Pausar todas as campanhas</strong> whitelisted no Meta Ads</li>
+              <li>• Disparar alerta crítico no WhatsApp</li>
+            </ul>
+            <p className="text-xs text-muted-foreground mb-4 italic">
+              Reverter: ativa campanhas no Meta + desliga supervisedMode em /config.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirming(false)}
+                disabled={stop.isPending}
+                className="text-sm px-3 py-2 bg-muted hover:bg-muted/70 rounded-md disabled:opacity-50"
+              >
+                cancelar
+              </button>
+              <button
+                onClick={() => stop.mutate()}
+                disabled={stop.isPending}
+                className="text-sm px-3 py-2 bg-destructive text-destructive-foreground rounded-md font-medium hover:bg-destructive/90 disabled:opacity-50"
+              >
+                {stop.isPending ? "parando..." : "🛑 Acionar Freio"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+          onClick={e => {
+            if (e.target === e.currentTarget) setResult(null);
+          }}
+        >
+          <div className="bg-card border border-success/40 rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-medium text-success mb-3">🛑 Freio acionado</h3>
+            <ul className="text-sm space-y-1.5 mb-4">
+              <li className={result.supervisedModeSet ? "text-success" : "text-muted-foreground"}>
+                {result.supervisedModeSet ? "✓" : "✗"} supervisedMode = true
+              </li>
+              <li className={result.campaignsPaused > 0 ? "text-success" : "text-muted-foreground"}>
+                {result.campaignsPaused > 0 ? "✓" : "·"} {result.campaignsPaused} campanha(s) pausada(s) no Meta
+                {result.campaignsFailed > 0 && (
+                  <span className="text-destructive"> ({result.campaignsFailed} falharam)</span>
+                )}
+              </li>
+              <li className={result.notificationSent ? "text-success" : "text-muted-foreground"}>
+                {result.notificationSent ? "✓" : "✗"} WhatsApp notificado
+              </li>
+            </ul>
+            <button
+              onClick={() => setResult(null)}
+              className="text-sm px-4 py-2 bg-muted hover:bg-muted/70 rounded-md w-full"
+            >
+              fechar
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // ─── Botão Relatório CEO + modal ────────────────────────────────────

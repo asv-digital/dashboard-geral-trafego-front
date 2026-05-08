@@ -16,9 +16,13 @@ import {
 import {
   api,
   type ActionLogItem,
+  type AwarenessMismatchesResponse,
   type BriefingResponse,
+  type CreativeMismatch,
   type CreativeVolumeScoreResponse,
   type DecisionQueueResponse,
+  type MonthlyPaceResponse,
+  type PaceStatus,
   type ProfitWaterfallResponse,
   type TimeseriesMetric,
 } from "@/lib/api";
@@ -66,6 +70,16 @@ export default function ProductOverviewPage({
     queryFn: () => api.listActions(id, { limit: 8 }),
     refetchInterval: 60_000,
   });
+  const pace = useQuery({
+    queryKey: ["analytics", "monthly-pace", id],
+    queryFn: () => api.monthlyPace(id),
+    refetchInterval: 5 * 60_000,
+  });
+  const mismatches = useQuery({
+    queryKey: ["analytics", "mismatches", id],
+    queryFn: () => api.awarenessMismatches(id, 30),
+    refetchInterval: 10 * 60_000,
+  });
 
   const briefingRefresh = useMutation({
     mutationFn: () => api.briefing(id, true),
@@ -89,6 +103,12 @@ export default function ProductOverviewPage({
 
       {/* Hero KPIs */}
       <HeroKpis waterfall={waterfall.data} volume={volume.data} loading={waterfall.isLoading} />
+
+      {/* Pacing + Mismatches (Roadmap Sobral 1, 2) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <PacingCard data={pace.data} loading={pace.isLoading} />
+        <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} />
+      </div>
 
       {/* Status Agente + Briefing IA */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -255,6 +275,203 @@ function BigKpi({
           {hint}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Pacing Mensal ──────────────────────────────────────────────────
+
+const PACE_STATUS_META: Record<PaceStatus, { label: string; cls: string; emoji: string }> = {
+  ahead: { label: "Adiante da meta", cls: "text-success", emoji: "🟢" },
+  on_track: { label: "No ritmo", cls: "text-emerald-400", emoji: "🔵" },
+  behind: { label: "Atrás da meta", cls: "text-yellow-500", emoji: "🟡" },
+  critical: { label: "CRÍTICO", cls: "text-destructive", emoji: "🔴" },
+  no_goal: { label: "Sem meta cadastrada", cls: "text-muted-foreground", emoji: "⚪" },
+};
+
+function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
+  return (
+    <section className="bg-card border border-border rounded-lg p-5 h-full">
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-base font-medium">Pacing mensal</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Sobral: meta mensal direciona quão agressivo escalar.
+          </p>
+        </div>
+        {data && (
+          <span className="text-xs text-muted-foreground">
+            D{data.dayOfMonth}/{data.daysInMonth}
+          </span>
+        )}
+      </div>
+      {loading || !data ? (
+        <SkeletonLines lines={3} />
+      ) : data.status === "no_goal" ? (
+        <div className="text-sm text-muted-foreground">
+          Sem MonthlyGoal cadastrada pra {data.month}. Cadastre em <strong>/config</strong> pra
+          o agente ajustar threshold de scale dinamicamente.
+        </div>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-3">
+            <div className="text-3xl font-heading font-semibold tabular-nums">
+              {data.currentSales}
+              <span className="text-base text-muted-foreground font-normal">
+                {" "}
+                / {data.targetSales}
+              </span>
+            </div>
+            <div className={`text-sm ${PACE_STATUS_META[data.status].cls}`}>
+              {PACE_STATUS_META[data.status].emoji} {PACE_STATUS_META[data.status].label}
+            </div>
+          </div>
+          {/* Barra de progresso */}
+          <div className="h-2 bg-muted rounded-full overflow-hidden mt-3">
+            <div
+              className={`h-full ${
+                data.status === "ahead"
+                  ? "bg-success"
+                  : data.status === "on_track"
+                    ? "bg-emerald-500"
+                    : data.status === "behind"
+                      ? "bg-yellow-500"
+                      : "bg-destructive"
+              }`}
+              style={{
+                width: `${Math.min(100, ((data.currentSales / (data.targetSales || 1)) * 100))}%`,
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3 mt-4 text-xs">
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Pace projetado</div>
+              <div className="font-medium tabular-nums">{data.pace ?? "—"} vendas</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Precisa/dia</div>
+              <div className="font-medium tabular-nums">
+                {data.requiredDailySales !== null ? data.requiredDailySales : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-muted-foreground">Restam</div>
+              <div className="font-medium tabular-nums">{data.daysLeft}d</div>
+            </div>
+          </div>
+          {data.scaleThresholdAdjust !== 1.0 && (
+            <div className="text-[11px] text-muted-foreground mt-3 italic">
+              Agente ajustou threshold de scale em ×{data.scaleThresholdAdjust.toFixed(2)} —{" "}
+              {data.scaleThresholdAdjust > 1
+                ? "mais agressivo (atrás da meta)"
+                : "mais conservador (adiante)"}
+              .
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+// ─── Awareness Mismatches ───────────────────────────────────────────
+
+function MismatchesCard({
+  data,
+  loading,
+}: {
+  data: AwarenessMismatchesResponse | undefined;
+  loading: boolean;
+}) {
+  return (
+    <section className="bg-card border border-border rounded-lg p-5 h-full">
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <div>
+          <h2 className="text-base font-medium">Awareness × Audiência (Schwartz)</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Cold ≠ product-aware. Copy avançada em audiência fria explode CPA.
+          </p>
+        </div>
+      </div>
+      {loading || !data ? (
+        <SkeletonLines lines={3} />
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <SeverityChip
+              label="Ideal"
+              value={data.bySeverity.ideal}
+              cls="bg-success/10 text-success border-success/30"
+            />
+            <SeverityChip
+              label="OK"
+              value={data.bySeverity.ok}
+              cls="bg-muted/40 text-muted-foreground border-border"
+            />
+            <SeverityChip
+              label="Warn"
+              value={data.bySeverity.warn}
+              cls="bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+            />
+            <SeverityChip
+              label="Mismatch"
+              value={data.bySeverity.mismatch}
+              cls="bg-destructive/10 text-destructive border-destructive/30"
+            />
+          </div>
+          {data.items.length === 0 ? (
+            <div className="text-sm text-muted-foreground mt-4">
+              {data.bySeverity.untagged > 0
+                ? `${data.bySeverity.untagged} criativos sem tag — marque em /assets pra detectar mismatch.`
+                : "Nenhum mismatch detectado nos últimos 30d."}
+            </div>
+          ) : (
+            <div className="border border-border rounded mt-4">
+              {data.items.slice(0, 5).map(m => (
+                <MismatchRow key={m.creativeId} item={m} />
+              ))}
+              {data.items.length > 5 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground text-center border-t border-border">
+                  + {data.items.length - 5} outros mismatches
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function SeverityChip({ label, value, cls }: { label: string; value: number; cls: string }) {
+  return (
+    <div className={`px-2 py-1.5 rounded border ${cls}`}>
+      <div className="text-[10px] uppercase tracking-wider opacity-70">{label}</div>
+      <div className="text-base font-medium tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function MismatchRow({ item }: { item: CreativeMismatch }) {
+  const isGrave = item.matchScore === "mismatch";
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-border last:border-b-0 text-sm">
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate">{item.creativeName}</div>
+        <div className="text-xs text-muted-foreground">
+          <span className="text-primary">{item.awarenessStage}</span> em{" "}
+          <span>{item.audience}</span> · CPA {item.cpa ? `R$${item.cpa.toFixed(0)}` : "—"}
+        </div>
+      </div>
+      <span
+        className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${
+          isGrave
+            ? "bg-destructive/10 text-destructive border-destructive/30"
+            : "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+        }`}
+      >
+        {isGrave ? "GRAVE" : "warn"}
+      </span>
     </div>
   );
 }

@@ -733,7 +733,52 @@ export const api = {
     request<BriefingResponse>(`/analytics/briefing/${productId}${qs({ refresh })}`),
   globalOverview: (days = 7) =>
     request<GlobalOverviewResponse>(`/analytics/global-overview${qs({ days })}`),
+
+  // Roadmap Sobral
+  monthlyPace: (productId: string) =>
+    request<MonthlyPaceResponse>(`/analytics/monthly-pace/${productId}`),
+  awarenessMismatches: (productId: string, days = 30) =>
+    request<AwarenessMismatchesResponse>(`/analytics/awareness-mismatches/${productId}${qs({ days })}`),
 };
+
+export type PaceStatus = "no_goal" | "ahead" | "on_track" | "behind" | "critical";
+export interface MonthlyPaceResponse {
+  month: string;
+  dayOfMonth: number;
+  daysInMonth: number;
+  daysLeft: number;
+  targetSales: number | null;
+  targetProfit: number | null;
+  targetCpa: number | null;
+  targetRoas: number | null;
+  currentSales: number;
+  currentProfit: number;
+  currentSpend: number;
+  pace: number | null;
+  paceRatio: number | null;
+  requiredDailySales: number | null;
+  status: PaceStatus;
+  scaleThresholdAdjust: number;
+}
+
+export type MatchScore = "ideal" | "ok" | "warn" | "mismatch";
+export interface CreativeMismatch {
+  creativeId: string;
+  creativeName: string;
+  awarenessStage: AwarenessStage;
+  audience: AudienceType;
+  campaignName: string;
+  cpa: number | null;
+  hookRate: number | null;
+  matchScore: MatchScore;
+  reason: string;
+}
+export interface AwarenessMismatchesResponse {
+  productId: string;
+  total: number;
+  bySeverity: { mismatch: number; warn: number; ok: number; ideal: number; untagged: number };
+  items: CreativeMismatch[];
+}
 
 export type TimeseriesMetric = "cpa" | "roas" | "sales" | "spend" | "cm" | "hookRate";
 export interface TimeseriesPoint {

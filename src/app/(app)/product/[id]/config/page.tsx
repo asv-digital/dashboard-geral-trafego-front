@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ProductAutomationConfig } from "@/lib/api";
+import { PageHeader } from "@/components/ui/page-header";
 
 type EditableAutomationConfig = Omit<
   ProductAutomationConfig,
@@ -58,14 +59,11 @@ export default function ConfigPage({ params }: { params: Promise<{ id: string }>
   }
 
   return (
-    <div className="p-8 max-w-3xl">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Config de automação</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Thresholds derivados da economia do produto. Sobrescreva manualmente se
-          souber o que tá fazendo.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 max-w-3xl">
+      <PageHeader
+        title="Config de automacao"
+        subtitle="Thresholds derivados da economia do produto. Sobrescreva manualmente se souber o que esta fazendo."
+      />
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
         <Section title="Auto-pause">

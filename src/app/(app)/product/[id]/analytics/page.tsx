@@ -24,6 +24,7 @@ import {
   type ProfitWaterfallResponse,
 } from "@/lib/api";
 import { formatBRL, formatPercent, formatNumber } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function AnalyticsPage({
   params,
@@ -79,13 +80,11 @@ export default function AnalyticsPage({
   });
 
   return (
-    <div className="p-8 space-y-8">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Analytics</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Análise → ação → ação → ação. Profit absoluto manda — ROAS é vaidade.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-8">
+      <PageHeader
+        title="Analytics"
+        subtitle="Analise → acao → acao → acao. Lucro absoluto manda — ROAS e vaidade."
+      />
 
       <DecisionQueueSection data={decisionsQ.data} loading={decisionsQ.isLoading} />
       <VolumeScoreSection data={volumeQ.data} loading={volumeQ.isLoading} />

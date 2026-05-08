@@ -212,6 +212,7 @@ function HeroKpisGrid({
           deltaDirection={kpi.direction}
           hint={group === "secondary" ? kpi.hint : undefined}
           size={group === "secondary" ? "sm" : "md"}
+          tooltipTerm={kpi.key}
         />
       ))}
     </div>

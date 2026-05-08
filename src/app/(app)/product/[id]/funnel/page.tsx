@@ -4,6 +4,7 @@ import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { formatBRL, formatNumber, formatPercent } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
 
 interface Stage {
   label: string;
@@ -48,13 +49,11 @@ export default function FunnelPage({ params }: { params: Promise<{ id: string }>
   const base = stages[0]?.value || 1;
 
   return (
-    <div className="p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Funil</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Da impressão à venda — taxas de conversão etapa a etapa.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Funil"
+        subtitle="Da impressao a venda — taxas de conversao etapa a etapa."
+      />
 
       <div className="space-y-3">
         {stages.map((stage, index) => {

@@ -1,14 +1,39 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutDashboard, Plus, Target, Settings, LogOut } from "lucide-react";
-import { api, type ProductListItem } from "@/lib/api";
+import {
+  LayoutDashboard,
+  Plus,
+  Settings,
+  LogOut,
+  Search,
+  AlertCircle,
+} from "lucide-react";
+import {
+  api,
+  type GlobalOverviewProduct,
+  type ProductHealth,
+  type ProductListItem,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { StatusDot, type Tone } from "@/components/ui/status-badge";
+
+const HEALTH_TONE: Record<ProductHealth, Tone> = {
+  elite: "success",
+  bom: "success",
+  mediano: "warning",
+  critico: "danger",
+};
+
+const SEARCH_THRESHOLD = 5;
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [search, setSearch] = useState("");
+
   const { data } = useQuery({
     queryKey: ["products"],
     queryFn: () => api.listProducts(),
@@ -17,9 +42,38 @@ export function Sidebar() {
     queryKey: ["auth", "me"],
     queryFn: () => api.me(),
   });
+  const { data: overview } = useQuery({
+    queryKey: ["global", "overview", 7],
+    queryFn: () => api.globalOverview(7),
+    refetchInterval: 60_000,
+  });
 
-  const products = data?.products ?? [];
+  const products = useMemo(() => data?.products ?? [], [data]);
   const isOwner = me?.user.role === "owner";
+
+  const overviewMap = useMemo(() => {
+    const m = new Map<string, GlobalOverviewProduct>();
+    for (const p of overview?.products ?? []) m.set(p.productId, p);
+    return m;
+  }, [overview]);
+
+  const totalAlerts = useMemo(
+    () => (overview?.products ?? []).reduce((acc, p) => acc + (p.alerts ?? 0), 0),
+    [overview],
+  );
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return products;
+    const q = search.toLowerCase();
+    return products.filter(
+      p =>
+        p.name.toLowerCase().includes(q) ||
+        p.slug.toLowerCase().includes(q) ||
+        p.stage.toLowerCase().includes(q),
+    );
+  }, [products, search]);
+
+  const showSearch = products.length > SEARCH_THRESHOLD;
 
   return (
     <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar flex flex-col">
@@ -28,7 +82,7 @@ export function Sidebar() {
           Bravy
         </div>
         <div className="text-sidebar-foreground/60 text-xs mt-0.5">
-          Dashboard Geral de Tráfego
+          Dashboard Geral de Trafego
         </div>
       </div>
 
@@ -36,13 +90,37 @@ export function Sidebar() {
         <NavItem
           href="/global"
           icon={<LayoutDashboard className="w-4 h-4" />}
-          label="Visão Geral"
+          label="Visao Geral"
           active={pathname === "/global"}
+          rightSlot={
+            totalAlerts > 0 ? (
+              <span className="text-[10px] tabular-nums px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30">
+                {totalAlerts}
+              </span>
+            ) : undefined
+          }
         />
 
-        <div className="pt-4 pb-1 px-3 text-[11px] uppercase tracking-wider text-sidebar-foreground/40">
-          Produtos
+        <div className="pt-4 pb-1 px-3 flex items-center justify-between">
+          <span className="text-[11px] uppercase tracking-wider text-sidebar-foreground/40">
+            Produtos {products.length > 0 && `(${products.length})`}
+          </span>
         </div>
+
+        {showSearch && (
+          <div className="px-3 pb-2">
+            <div className="relative">
+              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-sidebar-foreground/40" />
+              <input
+                type="search"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="buscar produto..."
+                className="w-full text-xs bg-sidebar-accent/40 border border-sidebar-border rounded pl-7 pr-2 py-1.5 focus:outline-none focus:border-sidebar-ring"
+              />
+            </div>
+          </div>
+        )}
 
         {products.length === 0 && (
           <div className="px-3 py-2 text-xs text-sidebar-foreground/50">
@@ -50,24 +128,56 @@ export function Sidebar() {
           </div>
         )}
 
-        {products.map((p: ProductListItem) => (
-          <NavItem
-            key={p.id}
-            href={`/product/${p.id}`}
-            icon={<Target className="w-4 h-4" />}
-            label={p.name}
-            badge={p.status !== "active" ? p.status : undefined}
-            active={pathname?.startsWith(`/product/${p.id}`)}
-          />
-        ))}
+        {products.length > 0 && filtered.length === 0 && search && (
+          <div className="px-3 py-2 text-xs text-sidebar-foreground/50">
+            Nada encontrado
+          </div>
+        )}
 
-        <NavItem
-          href="/product/new"
-          icon={<Plus className="w-4 h-4" />}
-          label="Novo produto"
-          active={pathname === "/product/new"}
-          muted
-        />
+        {filtered.map((p: ProductListItem) => {
+          const ov = overviewMap.get(p.id);
+          const tone: Tone | undefined = ov ? HEALTH_TONE[ov.health] : undefined;
+          const productAlerts = ov?.alerts ?? 0;
+          const active = pathname?.startsWith(`/product/${p.id}`);
+          return (
+            <NavItem
+              key={p.id}
+              href={`/product/${p.id}`}
+              icon={
+                tone ? (
+                  <StatusDot tone={tone} className="w-2 h-2" />
+                ) : (
+                  <span className="w-2 h-2 rounded-full bg-sidebar-foreground/20" />
+                )
+              }
+              label={p.name}
+              active={active}
+              dim={p.status !== "active"}
+              statusLabel={p.status !== "active" ? p.status : undefined}
+              rightSlot={
+                productAlerts > 0 ? (
+                  <span
+                    className="text-[10px] tabular-nums px-1.5 py-0.5 rounded bg-destructive/15 text-destructive border border-destructive/30 inline-flex items-center gap-1"
+                    title={`${productAlerts} alerta(s) ativo(s)`}
+                  >
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    {productAlerts}
+                  </span>
+                ) : undefined
+              }
+            />
+          );
+        })}
+
+        <div className="pt-2">
+          <NavItem
+            href="/product/new"
+            icon={<Plus className="w-4 h-4" />}
+            label="Novo produto"
+            active={pathname === "/product/new"}
+            muted
+          />
+        </div>
       </nav>
 
       <div className="border-t border-sidebar-border px-3 py-3 space-y-1">
@@ -75,7 +185,7 @@ export function Sidebar() {
           <NavItem
             href="/settings"
             icon={<Settings className="w-4 h-4" />}
-            label="Configurações"
+            label="Configuracoes"
             active={pathname === "/settings"}
           />
         )}
@@ -90,34 +200,42 @@ function NavItem({
   icon,
   label,
   active,
-  badge,
+  rightSlot,
   muted,
+  dim,
+  statusLabel,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   active?: boolean;
-  badge?: string;
+  rightSlot?: React.ReactNode;
   muted?: boolean;
+  dim?: boolean;
+  statusLabel?: string;
 }) {
   return (
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors",
+        "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors group",
         active
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
-        muted && !active && "text-sidebar-foreground/50"
+        muted && !active && "text-sidebar-foreground/50",
+        dim && !active && "text-sidebar-foreground/45",
       )}
     >
-      <span className="shrink-0">{icon}</span>
-      <span className="flex-1 truncate">{label}</span>
-      {badge && (
-        <span className="text-[10px] uppercase px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-          {badge}
-        </span>
-      )}
+      <span className="shrink-0 flex items-center justify-center w-4 h-4">{icon}</span>
+      <span className="flex-1 truncate flex items-center gap-1.5">
+        {label}
+        {statusLabel && (
+          <span className="text-[9px] uppercase tracking-wider text-sidebar-foreground/40">
+            · {statusLabel}
+          </span>
+        )}
+      </span>
+      {rightSlot}
     </Link>
   );
 }

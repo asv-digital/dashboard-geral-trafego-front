@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Rocket, Sparkles } from "lucide-react";
 import { api, ApiError, type PlannerCampaignPlan, type PlannerCommitResponse } from "@/lib/api";
 import { formatBRL } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function PlannerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -46,16 +47,12 @@ export default function PlannerPage({ params }: { params: Promise<{ id: string }
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-3xl">
-      <header>
-        <h2 className="text-xl font-heading font-semibold flex items-center gap-2">
-          <Sparkles className="w-5 h-5 text-primary" />
-          Planner do agente
-        </h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Estrutura sugerida baseada no stage do produto, orçamento, sinais de funil e assets prontos.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6 max-w-3xl">
+      <PageHeader
+        title="Planner do agente"
+        subtitle="Estrutura sugerida baseada no stage do produto, orcamento, sinais de funil e assets prontos."
+        actions={<Sparkles className="w-5 h-5 text-primary" />}
+      />
 
       {preflight && (
         <div

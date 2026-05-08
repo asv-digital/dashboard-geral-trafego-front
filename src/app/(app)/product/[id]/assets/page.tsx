@@ -114,10 +114,10 @@ export default function AssetsPage({
   );
 
   return (
-    <div className="p-8 space-y-6">
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-heading font-semibold">Conteúdo</h2>
+    <div className="p-6 md:p-8 space-y-6">
+      <header className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-heading font-semibold">Conteudo</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Suba criativos aqui — o agente usa no launch e no rebalance.
           </p>

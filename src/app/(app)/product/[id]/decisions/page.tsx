@@ -7,6 +7,8 @@ import {
   type ActionLogItem,
   type ActionSummaryItem,
 } from "@/lib/api";
+import { PageHeader } from "@/components/ui/page-header";
+import { formatDateTime } from "@/lib/format";
 
 export default function DecisionsPage({
   params,
@@ -31,13 +33,11 @@ export default function DecisionsPage({
   const actions = data?.actions ?? [];
 
   return (
-    <div className="p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Trading Journal</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Todas as decisões que o agente tomou — input, raciocínio, ação.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Trading Journal"
+        subtitle="Todas as decisoes que o agente tomou — input, raciocinio, acao."
+      />
 
       <div className="flex gap-2 flex-wrap">
         <FilterChip
@@ -125,14 +125,8 @@ function DecisionRow({ action }: { action: ActionLogItem }) {
               <div className="text-xs text-muted-foreground mt-1">{action.details}</div>
             )}
           </div>
-          <div className="text-xs text-muted-foreground whitespace-nowrap">
-            {new Date(action.executedAt).toLocaleString("pt-BR", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "2-digit",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          <div className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+            {formatDateTime(action.executedAt)}
           </div>
         </div>
       </summary>

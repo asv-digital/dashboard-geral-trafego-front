@@ -13,8 +13,16 @@ import {
   type ProfitWaterfallResponse,
 } from "@/lib/api";
 import { formatBRL } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge, type Tone } from "@/components/ui/status-badge";
 
 type Severity = "critical" | "warning" | "info";
+
+const SEVERITY_TONE: Record<Severity, Tone> = {
+  critical: "danger",
+  warning: "warning",
+  info: "info",
+};
 
 interface AlertItem {
   severity: Severity;
@@ -74,13 +82,11 @@ export default function AlertsPage({
   };
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Alertas</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Tudo que precisa de olho agora — consolidado de fadiga, mismatch, pacing, profit e decisões.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Alertas"
+        subtitle="Tudo que precisa de olho agora — consolidado de fadiga, mismatch, pacing, lucro e decisoes."
+      />
 
       {isLoading ? (
         <div className="space-y-2">
@@ -90,15 +96,15 @@ export default function AlertsPage({
         </div>
       ) : alerts.length === 0 ? (
         <div className="border border-dashed border-border rounded-lg p-12 text-center">
-          <p className="text-success text-sm">✅ Sem alertas. Tudo limpo.</p>
+          <p className="text-success text-sm">Sem alertas. Tudo limpo.</p>
         </div>
       ) : (
         <>
           {grouped.critical.length > 0 && (
-            <Section title="Crítico" severity="critical" items={grouped.critical} />
+            <Section title="Critico" severity="critical" items={grouped.critical} />
           )}
           {grouped.warning.length > 0 && (
-            <Section title="Atenção" severity="warning" items={grouped.warning} />
+            <Section title="Atencao" severity="warning" items={grouped.warning} />
           )}
           {grouped.info.length > 0 && (
             <Section title="Informativo" severity="info" items={grouped.info} />
@@ -118,15 +124,15 @@ function Section({
   severity: Severity;
   items: AlertItem[];
 }) {
-  const cls = {
+  const containerCls = {
     critical: "bg-destructive/5 border-destructive/30",
-    warning: "bg-yellow-500/5 border-yellow-500/30",
-    info: "bg-blue-500/5 border-blue-500/30",
+    warning: "bg-warning/5 border-warning/30",
+    info: "bg-info/5 border-info/30",
   }[severity];
   const headingCls = {
     critical: "text-destructive",
-    warning: "text-yellow-500",
-    info: "text-blue-400",
+    warning: "text-warning",
+    info: "text-info",
   }[severity];
 
   return (
@@ -134,23 +140,13 @@ function Section({
       <h3 className={`text-xs uppercase tracking-wider font-medium mb-2 ${headingCls}`}>
         {title} ({items.length})
       </h3>
-      <div className={`border rounded-lg overflow-hidden ${cls}`}>
+      <div className={`border rounded-lg overflow-hidden ${containerCls}`}>
         {items.map((item, i) => (
           <div
             key={i}
             className="px-4 py-3 border-b border-border last:border-b-0 text-sm flex items-start gap-3"
           >
-            <span
-              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${
-                severity === "critical"
-                  ? "bg-destructive/10 text-destructive border-destructive/30"
-                  : severity === "warning"
-                    ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
-                    : "bg-blue-500/10 text-blue-400 border-blue-500/30"
-              }`}
-            >
-              {item.category}
-            </span>
+            <StatusBadge tone={SEVERITY_TONE[severity]} label={item.category} size="sm" />
             <div className="flex-1 min-w-0">
               <div className="font-medium">{item.title}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{item.detail}</div>

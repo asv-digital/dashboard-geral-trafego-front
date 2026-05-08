@@ -4,11 +4,18 @@ import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { api, type PreflightCheck, type PreflightStatus } from "@/lib/api";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge as StatusBadgeShared, type Tone } from "@/components/ui/status-badge";
 
-const STATUS_COLORS: Record<PreflightStatus, string> = {
-  ok: "bg-success/20 text-success border-success/40",
-  warning: "bg-warning/20 text-warning border-warning/40",
-  error: "bg-destructive/20 text-destructive border-destructive/40",
+const STATUS_TONE: Record<PreflightStatus, Tone> = {
+  ok: "success",
+  warning: "warning",
+  error: "danger",
+};
+const STATUS_LABEL: Record<PreflightStatus, string> = {
+  ok: "Tudo ok",
+  warning: "Com avisos",
+  error: "Com erros",
 };
 
 export default function PreflightPage({
@@ -34,16 +41,14 @@ export default function PreflightPage({
   const checks = data.checks ?? [];
 
   return (
-    <div className="p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Preflight</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Verificação exaustiva antes do agente operar com segurança.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Preflight"
+        subtitle="Verificacao exaustiva antes do agente operar com seguranca."
+      />
 
-      <div className="flex items-center gap-4">
-        <StatusBadge status={data.status} />
+      <div className="flex items-center gap-4 flex-wrap">
+        <StatusBadgeShared tone={STATUS_TONE[data.status]} label={STATUS_LABEL[data.status]} dot />
         <div className="text-sm text-muted-foreground">
           {data.errorCount} erro(s) · {data.warningCount} aviso(s) · {checks.length} checks
         </div>
@@ -79,14 +84,3 @@ function CheckRow({ check }: { check: PreflightCheck }) {
   );
 }
 
-function StatusBadge({ status }: { status: PreflightStatus }) {
-  return (
-    <div
-      className={`px-3 py-1 rounded-full border text-xs uppercase tracking-wider ${
-        STATUS_COLORS[status]
-      }`}
-    >
-      {status === "ok" ? "tudo ok" : status === "warning" ? "com avisos" : "com erros"}
-    </div>
-  );
-}

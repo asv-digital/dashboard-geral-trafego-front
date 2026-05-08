@@ -3,6 +3,8 @@
 import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type ActionLogItem } from "@/lib/api";
+import { PageHeader } from "@/components/ui/page-header";
+import { formatRelativeTime } from "@/lib/format";
 
 // Mapping action → categoria + cor + emoji. Ações conhecidas têm visual
 // próprio; desconhecidas caem em "system" cinza.
@@ -67,13 +69,11 @@ export default function RealtimePage({
   const filtered = filter === "all" ? items : items.filter(a => getCategory(a.action) === filter);
 
   return (
-    <div className="p-6 lg:p-8 space-y-4">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Tempo real</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Feed de decisões do agente. Atualiza a cada 30s.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-4">
+      <PageHeader
+        title="Tempo real"
+        subtitle="Feed de decisoes do agente. Atualiza a cada 30s."
+      />
 
       <div className="flex gap-2 flex-wrap">
         {CATEGORY_FILTERS.map(f => (
@@ -153,7 +153,7 @@ function ActionEvent({ action }: { action: ActionLogItem }) {
           </div>
         </div>
         <span className="text-[11px] shrink-0 opacity-70 tabular-nums">
-          {relativeTime(action.executedAt)}
+          {formatRelativeTime(action.executedAt)}
         </span>
       </div>
       {action.details && (
@@ -171,15 +171,3 @@ function ActionEvent({ action }: { action: ActionLogItem }) {
   );
 }
 
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const sec = Math.floor(diff / 1000);
-  if (sec < 30) return "agora";
-  if (sec < 60) return `${sec}s atrás`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}min atrás`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h atrás`;
-  const d = Math.floor(h / 24);
-  return `${d}d atrás`;
-}

@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { api } from "@/lib/api";
 import { formatBRL, formatPercent } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
 
 interface FatigueChartPoint {
   date: string;
@@ -87,13 +88,11 @@ export default function FatiguePage({
   }, [data]);
 
   return (
-    <div className="p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Fadiga de criativos</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          CPA e hook rate ao longo do tempo — procure inflexões.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Fadiga de criativos"
+        subtitle="CPA e hook rate ao longo do tempo — procure inflexoes."
+      />
 
       <ChartCard title="CPA diário">
         <ResponsiveContainer width="100%" height="100%">

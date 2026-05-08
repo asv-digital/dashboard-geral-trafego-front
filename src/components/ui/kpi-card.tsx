@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { Tone } from "./status-badge";
+import { InfoTooltip } from "./info-tooltip";
 
 export type DeltaDirection = "up_good" | "down_good" | "neutral";
 
@@ -32,6 +33,8 @@ export function KpiCard({
   tone,
   size = "md",
   className,
+  tooltipTerm,
+  tooltipText,
 }: {
   label: string;
   value: string;
@@ -41,6 +44,8 @@ export function KpiCard({
   tone?: Tone;
   size?: "sm" | "md" | "lg";
   className?: string;
+  tooltipTerm?: string;
+  tooltipText?: string;
 }) {
   const dt = deltaTone(delta, deltaDirection);
   const valueCls =
@@ -49,7 +54,12 @@ export function KpiCard({
   return (
     <div className={cn("bg-card border border-border rounded-lg", padding, className)}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</span>
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1">
+          {label}
+          {(tooltipTerm || tooltipText) && (
+            <InfoTooltip term={tooltipTerm} text={tooltipText} />
+          )}
+        </span>
         {delta != null && Number.isFinite(delta) && (
           <span className={cn("text-[10px] tabular-nums font-medium", TONE_TEXT[dt])}>
             {formatDelta(delta)}

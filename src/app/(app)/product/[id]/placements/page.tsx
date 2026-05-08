@@ -4,6 +4,7 @@ import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type PlacementItem } from "@/lib/api";
 import { formatBRL, formatNumber, formatPercent } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function PlacementsPage({
   params,
@@ -22,13 +23,11 @@ export default function PlacementsPage({
   const maxSpend = Math.max(...placements.map(placement => placement.spend), 1);
 
   return (
-    <div className="p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Placements</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Breakdown por plataforma + posição — últimos 7 dias.
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Placements"
+        subtitle="Breakdown por plataforma + posicao — ultimos 7 dias."
+      />
 
       {placements.length === 0 ? (
         <div className="border border-dashed border-border rounded-lg p-12 text-center text-sm text-muted-foreground">

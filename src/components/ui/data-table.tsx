@@ -151,7 +151,8 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="border border-border rounded-lg overflow-hidden bg-card">
+      {/* Desktop / tablet: tabela */}
+      <div className="border border-border rounded-lg overflow-hidden bg-card hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
@@ -224,6 +225,42 @@ export function DataTable<T>({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile: 1 linha = 1 card */}
+      <div className="md:hidden space-y-2">
+        {paged.length === 0 ? (
+          <div className="border border-dashed border-border rounded-lg p-8 text-center text-xs text-muted-foreground">
+            {emptyMessage}
+          </div>
+        ) : (
+          paged.map(row => {
+            const [first, ...rest] = columns;
+            return (
+              <div
+                key={keyOf(row)}
+                className={cn(
+                  "border border-border rounded-lg bg-card p-3 space-y-1.5",
+                  rowClassName?.(row),
+                )}
+              >
+                {/* primeira coluna em destaque */}
+                <div className="font-medium text-sm">{first?.render(row)}</div>
+                {/* demais em label/valor */}
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                  {rest.map(col => (
+                    <div key={col.key} className="flex justify-between gap-2 col-span-1">
+                      <dt className="text-muted-foreground uppercase tracking-wider text-[10px]">
+                        {col.label}
+                      </dt>
+                      <dd className="tabular-nums text-right truncate">{col.render(row)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {pageSize && totalPages > 1 && (

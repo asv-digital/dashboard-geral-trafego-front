@@ -4,6 +4,7 @@ import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { formatBRL } from "@/lib/format";
+import { PageHeader } from "@/components/ui/page-header";
 
 export default function MethodPage({
   params,
@@ -21,14 +22,11 @@ export default function MethodPage({
   const p = product.data?.product;
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
-      <header>
-        <h2 className="text-xl font-heading font-semibold">Método do agente</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Regras Pedro Sobral aplicadas neste produto. O que o agente vai fazer e por quê.
-          Valores derivados automaticamente da economia (preço, net, stage).
-        </p>
-      </header>
+    <div className="p-6 md:p-8 space-y-6">
+      <PageHeader
+        title="Metodo do agente"
+        subtitle="Regras Pedro Sobral aplicadas neste produto. O que o agente vai fazer e por que. Valores derivados automaticamente da economia (preco, net, stage)."
+      />
 
       {!cfg || !p ? (
         <div className="space-y-2">

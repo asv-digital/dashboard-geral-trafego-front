@@ -711,6 +711,20 @@ export const api = {
     request<LtvCohortResponse>(`/analytics/ltv-cohort/${productId}${qs({ days })}`),
   awarenessAnalytics: (productId: string, days = 30) =>
     request<AwarenessResponse>(`/analytics/awareness/${productId}${qs({ days })}`),
+
+  // Onda 2
+  creativeVolumeScore: (productId: string) =>
+    request<CreativeVolumeScoreResponse>(`/analytics/volume-score/${productId}`),
+  fatiguePredictions: (productId: string) =>
+    request<FatigueResponse>(`/analytics/fatigue/${productId}`),
+  cpaElasticity: (productId: string, days = 60) =>
+    request<ElasticityResponse>(`/analytics/elasticity/${productId}${qs({ days })}`),
+  decisionQueue: (productId: string) =>
+    request<DecisionQueueResponse>(`/analytics/decisions/${productId}`),
+  classifyAwareness: (productId: string) =>
+    request<ClassifyAwarenessResponse>(`/analytics/classify-awareness/${productId}`, {
+      method: "POST",
+    }),
 };
 
 export type AwarenessStage = "unaware" | "problem" | "solution" | "product" | "most_aware";
@@ -839,4 +853,108 @@ export interface AwarenessResponse {
   untaggedCount: number;
   bestPair: { stage: string; audience: AudienceType; winnerRate: number } | null;
   worstPair: { stage: string; audience: AudienceType; winnerRate: number } | null;
+}
+
+// ─── Onda 2 ─────────────────────────────────────────────────────
+
+export type CreativeGrade = "elite" | "bom" | "mediano" | "critico";
+
+export interface CreativeVolumeScoreResponse {
+  windowDays: number;
+  launchesLast7d: number;
+  launchesLast30d: number;
+  poolActive: number;
+  poolAvgAgeDays: number;
+  hitRatePct: number;
+  volumeScore: number;
+  hitRateScore: number;
+  freshnessScore: number;
+  totalScore: number;
+  grade: CreativeGrade;
+  recommendations: string[];
+}
+
+export type FatigueStatus = "healthy" | "declining" | "critical" | "no_data";
+
+export interface FatiguePrediction {
+  creativeId: string;
+  name: string;
+  type: string;
+  currentHookRate: number | null;
+  trendSlope: number;
+  daysToDeath: number | null;
+  status: FatigueStatus;
+  rSquared: number;
+  pointsAnalyzed: number;
+  reason: string;
+}
+
+export interface FatigueResponse {
+  windowDays: number;
+  hookRateFloor: number;
+  predictions: FatiguePrediction[];
+  summary: {
+    healthy: number;
+    declining: number;
+    critical: number;
+    noData: number;
+  };
+}
+
+export interface ElasticityPoint {
+  date: string;
+  budgetBefore: number;
+  budgetAfter: number;
+  cpaBefore: number | null;
+  cpaAfter: number | null;
+  cpaDelta: number | null;
+  budgetDelta: number;
+}
+
+export interface AdsetElasticity {
+  adsetId: string;
+  adsetName: string;
+  events: ElasticityPoint[];
+  kneeBudget: number | null;
+  signal: "stable" | "knee_detected" | "no_signal";
+  note: string;
+}
+
+export interface ElasticityResponse {
+  windowDays: number;
+  adsets: AdsetElasticity[];
+}
+
+export type DecisionAction =
+  | "pause_creative"
+  | "scale_winner"
+  | "replace_copy_awareness_mismatch"
+  | "produce_creatives"
+  | "watch_fatigue"
+  | "reduce_budget"
+  | "investigate_payback"
+  | "tag_assets";
+
+export interface DecisionItem {
+  priority: number;
+  action: DecisionAction;
+  title: string;
+  reasoning: string;
+  entity?: { type: "creative" | "adset" | "product"; id?: string; name?: string };
+  estimatedImpact?: string;
+}
+
+export interface DecisionQueueResponse {
+  generatedAt: string;
+  items: DecisionItem[];
+}
+
+export interface ClassifyAwarenessResponse {
+  productId: string;
+  totalAssets: number;
+  classified: number;
+  skippedNoLlm: number;
+  skippedNoCopy: number;
+  failed: number;
+  byStage: Record<AwarenessStage, number>;
 }

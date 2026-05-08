@@ -44,6 +44,10 @@ async function proxy(request: NextRequest, params: { path?: string[] }) {
 
   const headers = new Headers(request.headers);
   headers.delete("host");
+  // Forca upstream a NAO comprimir. Coolify/Traefik comprime por default e o
+  // body comprimido vaza pro client com content-encoding strippado abaixo,
+  // quebrando JSON.parse. Pedindo identity garantimos bytes crus.
+  headers.set("accept-encoding", "identity");
 
   const init: RequestInit = {
     method: request.method,

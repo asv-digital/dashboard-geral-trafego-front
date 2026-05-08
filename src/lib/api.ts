@@ -349,8 +349,18 @@ export interface AssetItem {
   tags: string | null;
   uploadedBy: string | null;
   error: string | null;
+  generatedCopy: string | null;
+  generatedHeadline: string | null;
+  generatedHook: string | null;
+  textGeneratedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GeneratedCreativeText {
+  copy: string;
+  headline: string;
+  hook: string;
 }
 
 export interface PlannerCampaignPlan {
@@ -682,6 +692,18 @@ export const api = {
     }),
   archiveAsset: (id: string) =>
     request<{ ok: boolean }>(`/assets/${id}`, { method: "DELETE" }),
+  generateAssetText: (assetId: string) =>
+    request<{ generated: GeneratedCreativeText }>(`/assets/${assetId}/auto-text`, {
+      method: "POST",
+    }),
+  updateAssetText: (
+    assetId: string,
+    patch: { copy?: string; headline?: string; hook?: string },
+  ) =>
+    request<{ asset: AssetItem }>(`/assets/${assetId}/text`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
 
   plannerPreview: (productId: string) =>
     request<PlannerPreviewResponse>(`/planner/preview/${productId}`),

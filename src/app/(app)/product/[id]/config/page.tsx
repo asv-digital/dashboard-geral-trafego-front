@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ProductAutomationConfig } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 type EditableAutomationConfig = Omit<
   ProductAutomationConfig,
@@ -64,6 +65,8 @@ export default function ConfigPage({ params }: { params: Promise<{ id: string }>
         title="Config de automacao"
         subtitle="Thresholds derivados da economia do produto. Sobrescreva manualmente se souber o que esta fazendo."
       />
+
+      <SupervisedModeCard productId={id} />
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
         <Section title="Auto-pause">
@@ -246,6 +249,83 @@ function toEditableAutomationConfig(
     budgetFloorRemarketing: config.budgetFloorRemarketing,
     daypartingEnabled: config.daypartingEnabled,
   };
+}
+
+function SupervisedModeCard({ productId }: { productId: string }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["product", productId],
+    queryFn: () => api.getProduct(productId),
+  });
+  const supervisedMode = !!data?.product?.supervisedMode;
+  const [pendingValue, setPendingValue] = useState<boolean | null>(null);
+
+  const mutation = useMutation({
+    mutationFn: (next: boolean) => api.updateProduct(productId, { supervisedMode: next }),
+    onSuccess: () => {
+      setPendingValue(null);
+      queryClient.invalidateQueries({ queryKey: ["product", productId] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "pulse", productId] });
+    },
+    onError: () => setPendingValue(null),
+  });
+
+  const handleToggle = (next: boolean) => {
+    if (next === supervisedMode) return;
+    if (next === true) {
+      const ok = window.confirm(
+        "Ligar SUPERVISED MODE?\n\nO agente vai parar de executar acoes (pause/scale/rebalance) automaticamente, mas continua coletando dado e sugerindo decisoes.\n\nIdeal pra observar campanhas existentes sem risco antes de delegar.",
+      );
+      if (!ok) return;
+    } else {
+      const ok = window.confirm(
+        "DESLIGAR supervised mode?\n\nA partir de agora o agente vai EXECUTAR acoes (pausar adsets ruins, escalar winners, rotacionar criativos exaustos) nas campanhas whitelisted.\n\nTem certeza?",
+      );
+      if (!ok) return;
+    }
+    setPendingValue(next);
+    mutation.mutate(next);
+  };
+
+  const displayValue = pendingValue !== null ? pendingValue : supervisedMode;
+
+  return (
+    <section className="mt-6 bg-card border border-border rounded-lg p-5">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base font-medium">Modo de operacao</h3>
+            <StatusBadge
+              tone={displayValue ? "warning" : "success"}
+              label={displayValue ? "Supervisionado" : "Autonomo"}
+              dot
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-xl">
+            {displayValue
+              ? "Agente coleta dado e sugere acoes mas NAO executa nada no Meta. Ideal pra observar campanhas existentes antes de delegar."
+              : "Agente executa pause/scale/rebalance autonomamente conforme thresholds abaixo. So liga isto quando confiar nas regras."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => handleToggle(!displayValue)}
+          disabled={mutation.isPending}
+          className={
+            displayValue
+              ? "px-4 py-2 text-sm bg-success/10 text-success border border-success/40 rounded-md hover:bg-success/20 transition-colors disabled:opacity-50"
+              : "px-4 py-2 text-sm bg-warning/10 text-warning border border-warning/40 rounded-md hover:bg-warning/20 transition-colors disabled:opacity-50"
+          }
+        >
+          {mutation.isPending
+            ? "salvando…"
+            : displayValue
+              ? "Desligar supervised mode"
+              : "Ligar supervised mode"}
+        </button>
+      </div>
+    </section>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

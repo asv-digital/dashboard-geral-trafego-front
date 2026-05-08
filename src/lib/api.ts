@@ -739,7 +739,17 @@ export const api = {
     request<MonthlyPaceResponse>(`/analytics/monthly-pace/${productId}`),
   awarenessMismatches: (productId: string, days = 30) =>
     request<AwarenessMismatchesResponse>(`/analytics/awareness-mismatches/${productId}${qs({ days })}`),
+  ceoReport: (productId: string, days = 7) =>
+    request<CeoReportResponse>(`/analytics/report-ceo/${productId}${qs({ days })}`),
 };
+
+export interface CeoReportResponse {
+  productId: string;
+  productName: string;
+  windowDays: number;
+  generatedAt: string;
+  markdown: string;
+}
 
 export type PaceStatus = "no_goal" | "ahead" | "on_track" | "behind" | "critical";
 export interface MonthlyPaceResponse {

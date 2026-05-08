@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bar,
@@ -18,6 +18,7 @@ import {
   type ActionLogItem,
   type AwarenessMismatchesResponse,
   type BriefingResponse,
+  type CeoReportResponse,
   type CreativeMismatch,
   type CreativeVolumeScoreResponse,
   type DecisionQueueResponse,
@@ -92,14 +93,19 @@ export default function ProductOverviewPage({
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      {productData?.supervisedMode && (
-        <div className="text-sm px-4 py-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-3">
-          <span className="font-medium">SUPERVISED MODE ON</span>
-          <span className="text-amber-400/80">
-            agente coleta+sugere mas não muda nada no Meta. Desligue em /config quando confiar.
-          </span>
-        </div>
-      )}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {productData?.supervisedMode ? (
+          <div className="text-sm px-4 py-3 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-3">
+            <span className="font-medium">SUPERVISED MODE ON</span>
+            <span className="text-amber-400/80">
+              agente coleta+sugere mas não muda nada no Meta.
+            </span>
+          </div>
+        ) : (
+          <div />
+        )}
+        <CeoReportButton productId={id} />
+      </div>
 
       {/* Hero KPIs */}
       <HeroKpis waterfall={waterfall.data} volume={volume.data} loading={waterfall.isLoading} />
@@ -146,6 +152,91 @@ export default function ProductOverviewPage({
 
 function productData_extract(d: { product?: { supervisedMode: boolean } } | undefined) {
   return d?.product;
+}
+
+// ─── Botão Relatório CEO + modal ────────────────────────────────────
+
+function CeoReportButton({ productId }: { productId: string }) {
+  const [open, setOpen] = useState(false);
+  const [report, setReport] = useState<CeoReportResponse | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generate = useMutation({
+    mutationFn: () => api.ceoReport(productId, 7),
+    onSuccess: data => {
+      setReport(data);
+      setOpen(true);
+    },
+  });
+
+  async function copyToClipboard() {
+    if (!report) return;
+    try {
+      await navigator.clipboard.writeText(report.markdown);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => generate.mutate()}
+        disabled={generate.isPending}
+        className="text-sm px-3 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+      >
+        {generate.isPending ? "gerando..." : "📊 Relatório CEO"}
+      </button>
+
+      {open && report && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={e => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div className="bg-card border border-border rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-border">
+              <h3 className="text-base font-medium">
+                Relatório CEO — {report.productName}
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={copyToClipboard}
+                  className="text-xs px-3 py-1.5 bg-muted hover:bg-muted/70 rounded transition-colors"
+                >
+                  {copied ? "✓ copiado" : "copiar markdown"}
+                </button>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="text-xs px-3 py-1.5 bg-muted hover:bg-muted/70 rounded transition-colors"
+                >
+                  fechar
+                </button>
+              </div>
+            </div>
+            <div className="overflow-y-auto px-6 py-4 flex-1">
+              <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed text-foreground">
+                {report.markdown}
+              </pre>
+            </div>
+            <div className="px-5 py-2 border-t border-border text-[10px] text-muted-foreground">
+              gerado{" "}
+              {new Date(report.generatedAt).toLocaleString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}{" "}
+              · janela {report.windowDays}d
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // ─── Hero ───────────────────────────────────────────────────────────

@@ -18,7 +18,8 @@ WORKDIR /app
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+# pasta public/ nao existe no v2 — Next 16 com output: standalone nao
+# exige. Deixar de copiar evita "/app/public: not found" no build.
 
 EXPOSE 3000
 

@@ -54,6 +54,8 @@ export default function PlannerPage({ params }: { params: Promise<{ id: string }
         actions={<Sparkles className="w-5 h-5 text-primary" />}
       />
 
+      <StrategyBlueprintCard />
+
       {preflight && (
         <div
           className={`rounded-lg border p-4 text-sm ${
@@ -177,6 +179,98 @@ export default function PlannerPage({ params }: { params: Promise<{ id: string }
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+function StrategyBlueprintCard() {
+  const [open, setOpen] = useState(false);
+  const items = [
+    {
+      label: "Estrutura",
+      value: "ABO Advantage+ Shopping (Meta decide audiencia/placement/criativo)",
+    },
+    {
+      label: "Otimizacao",
+      value: "OFFSITE_CONVERSIONS — Pixel + CAPI tracking Purchase",
+    },
+    {
+      label: "Granularidade",
+      value: "1 criativo por adset · R$ 100-200/dia/adset · 3-4d pra Meta validar",
+    },
+    {
+      label: "Audiencia",
+      value: "Geo BR · idade 25-65 · sem flexible_spec (Advantage+)",
+    },
+    {
+      label: "Exclusao",
+      value: "Compradores 180d (custom audience [57AGENTS] Purchase 180d)",
+    },
+    {
+      label: "Camada quente",
+      value: "Remarketing visitantes 30d ([57AGENTS] PV 30d) — destrava no V2",
+    },
+    {
+      label: "Naming",
+      value: "[VSL-AGENCIA] [VENDAS] [ABO] [<NICHO>] DD.MM.AAAA",
+    },
+  ];
+  const benchmarks = [
+    { label: "CPA top performer", value: "R$ 52" },
+    { label: "ROAS top performer", value: "2.13x" },
+    { label: "CPA medio aceito", value: "R$ 60-90" },
+    { label: "ROAS alvo", value: "≥ 1.50x" },
+  ];
+  return (
+    <div className="bg-card border border-primary/30 rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-5 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <div className="text-sm font-medium text-left">
+            Estrategia (referencia)
+            <span className="ml-2 text-[11px] text-muted-foreground font-normal">
+              o que ja roda no nicho · {open ? "ocultar" : "expandir"}
+            </span>
+          </div>
+        </div>
+        <span className="text-xs text-muted-foreground">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div className="px-5 pb-4 pt-1 space-y-3 border-t border-border">
+          <p className="text-[11px] text-muted-foreground italic leading-relaxed">
+            Mapeamento das campanhas que ja rodam na conta — replicaremos essa estrutura
+            pro nosso funil VSL, isolado em produto proprio. Nao mexemos nas existentes.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {items.map(it => (
+              <div key={it.label} className="border border-border rounded p-2.5 bg-background/40">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {it.label}
+                </div>
+                <div className="text-xs mt-0.5 leading-snug">{it.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border pt-3">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+              Benchmark ultimos 30d (referencia)
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {benchmarks.map(b => (
+                <div key={b.label} className="bg-success/5 border border-success/30 rounded p-2">
+                  <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                    {b.label}
+                  </div>
+                  <div className="text-sm font-medium text-success tabular-nums">{b.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

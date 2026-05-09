@@ -333,6 +333,18 @@ export interface HeartbeatItem {
   } | null;
 }
 
+export interface MonthlyGoalItem {
+  id: string;
+  productId: string;
+  month: string;
+  targetSales: number;
+  targetCpa: number | null;
+  targetRoas: number | null;
+  targetProfit: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AssetItem {
   id: string;
   productId: string;
@@ -593,6 +605,21 @@ export const api = {
     }),
   archiveProduct: (id: string) =>
     request<{ ok: boolean }>(`/products/${id}`, { method: "DELETE" }),
+
+  listMonthlyGoals: (productId: string) =>
+    request<{ goals: MonthlyGoalItem[] }>(`/products/${productId}/monthly-goals`),
+  upsertMonthlyGoal: (
+    productId: string,
+    data: { month: string; targetSales: number; targetCpa?: number; targetRoas?: number; targetProfit?: number },
+  ) =>
+    request<{ goal: MonthlyGoalItem }>(`/products/${productId}/monthly-goals`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteMonthlyGoal: (productId: string, goalId: string) =>
+    request<{ ok: boolean }>(`/products/${productId}/monthly-goals/${goalId}`, {
+      method: "DELETE",
+    }),
 
   listCampaigns: (productId: string) =>
     request<{ campaigns: CampaignListItem[] }>(`/campaigns${qs({ productId })}`),

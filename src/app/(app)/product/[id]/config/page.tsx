@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ProductAutomationConfig } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { formatBRL } from "@/lib/format";
+import { Trash2 } from "lucide-react";
 
 type EditableAutomationConfig = Omit<
   ProductAutomationConfig,
@@ -67,6 +69,8 @@ export default function ConfigPage({ params }: { params: Promise<{ id: string }>
       />
 
       <SupervisedModeCard productId={id} />
+
+      <MonthlyGoalsCard productId={id} />
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
         <Section title="Auto-pause">
@@ -323,6 +327,163 @@ function SupervisedModeCard({ productId }: { productId: string }) {
               ? "Desligar supervised mode"
               : "Ligar supervised mode"}
         </button>
+      </div>
+    </section>
+  );
+}
+
+function MonthlyGoalsCard({ productId }: { productId: string }) {
+  const queryClient = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ["monthly-goals", productId],
+    queryFn: () => api.listMonthlyGoals(productId),
+  });
+
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(defaultMonth);
+  const [targetSales, setTargetSales] = useState("");
+  const [targetCpa, setTargetCpa] = useState("");
+  const [targetRoas, setTargetRoas] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const upsert = useMutation({
+    mutationFn: () =>
+      api.upsertMonthlyGoal(productId, {
+        month,
+        targetSales: parseInt(targetSales, 10),
+        targetCpa: targetCpa ? parseFloat(targetCpa.replace(",", ".")) : undefined,
+        targetRoas: targetRoas ? parseFloat(targetRoas.replace(",", ".")) : undefined,
+      }),
+    onSuccess: () => {
+      setError(null);
+      setTargetSales("");
+      setTargetCpa("");
+      setTargetRoas("");
+      queryClient.invalidateQueries({ queryKey: ["monthly-goals", productId] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "monthly-pace", productId] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "pulse", productId] });
+    },
+    onError: () => setError("falha ao salvar meta"),
+  });
+
+  const del = useMutation({
+    mutationFn: (goalId: string) => api.deleteMonthlyGoal(productId, goalId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["monthly-goals", productId] });
+      queryClient.invalidateQueries({ queryKey: ["analytics", "monthly-pace", productId] });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!targetSales || parseInt(targetSales, 10) <= 0) {
+      setError("targetSales obrigatorio");
+      return;
+    }
+    upsert.mutate();
+  };
+
+  const goals = data?.goals ?? [];
+
+  return (
+    <section className="mt-6 bg-card border border-border rounded-lg p-5 space-y-4">
+      <div>
+        <h3 className="text-base font-medium">Metas mensais (pacing)</h3>
+        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+          Sobral way: meta mensal direciona quao agressivo o agente escala. Sem meta, agente roda apenas com regras tecnicas.
+          Cadastra a meta de vendas do mes — o agente compara com vendas reais e ajusta dinamicamente o threshold de scale.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+        <div className="md:col-span-1">
+          <label className="text-xs text-muted-foreground">Mes</label>
+          <input
+            type="month"
+            value={month}
+            onChange={e => setMonth(e.target.value)}
+            className="w-full mt-1 px-2.5 py-1.5 bg-input border border-border rounded text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">Vendas alvo</label>
+          <input
+            type="number"
+            min="1"
+            value={targetSales}
+            onChange={e => setTargetSales(e.target.value)}
+            placeholder="120"
+            className="w-full mt-1 px-2.5 py-1.5 bg-input border border-border rounded text-sm tabular-nums"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">CPA alvo (R$, opcional)</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={targetCpa}
+            onChange={e => setTargetCpa(e.target.value)}
+            placeholder="ex: 75"
+            className="w-full mt-1 px-2.5 py-1.5 bg-input border border-border rounded text-sm tabular-nums"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground">ROAS alvo (opcional)</label>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={targetRoas}
+            onChange={e => setTargetRoas(e.target.value)}
+            placeholder="ex: 1.6"
+            className="w-full mt-1 px-2.5 py-1.5 bg-input border border-border rounded text-sm tabular-nums"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={upsert.isPending}
+          className="px-4 py-1.5 bg-primary text-primary-foreground rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+        >
+          {upsert.isPending ? "salvando…" : "Salvar / Atualizar"}
+        </button>
+      </form>
+      {error && <div className="text-xs text-destructive">{error}</div>}
+
+      <div className="border border-border rounded">
+        {isLoading ? (
+          <div className="p-4 text-xs text-muted-foreground">carregando…</div>
+        ) : goals.length === 0 ? (
+          <div className="p-4 text-xs text-muted-foreground italic">
+            Nenhuma meta cadastrada. Sem meta, agente roda em modo &quot;regras tecnicas puras&quot; (sem ajuste de pacing).
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {goals.map(g => (
+              <div key={g.id} className="px-3 py-2 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-primary">{g.month}</span>
+                  <span className="tabular-nums">
+                    <strong className="text-foreground">{g.targetSales}</strong> vendas
+                  </span>
+                  {g.targetCpa != null && (
+                    <span className="text-muted-foreground tabular-nums">CPA &lt; {formatBRL(g.targetCpa)}</span>
+                  )}
+                  {g.targetRoas != null && (
+                    <span className="text-muted-foreground tabular-nums">ROAS &gt; {g.targetRoas.toFixed(2)}x</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    if (confirm(`Apagar meta de ${g.month}?`)) del.mutate(g.id);
+                  }}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

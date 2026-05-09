@@ -10,7 +10,7 @@ import { Trash2 } from "lucide-react";
 
 type EditableAutomationConfig = Omit<
   ProductAutomationConfig,
-  "id" | "productId" | "createdAt" | "updatedAt"
+  "id" | "productId" | "createdAt" | "updatedAt" | "calibratedFromRealData" | "calibratedAt"
 >;
 
 export default function ConfigPage({ params }: { params: Promise<{ id: string }> }) {
@@ -69,6 +69,8 @@ export default function ConfigPage({ params }: { params: Promise<{ id: string }>
       />
 
       <SupervisedModeCard productId={id} />
+
+      <NichesCard productId={id} />
 
       <MonthlyGoalsCard productId={id} />
 
@@ -328,6 +330,68 @@ function SupervisedModeCard({ productId }: { productId: string }) {
               : "Ligar supervised mode"}
         </button>
       </div>
+    </section>
+  );
+}
+
+function NichesCard({ productId }: { productId: string }) {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["product", productId],
+    queryFn: () => api.getProduct(productId),
+  });
+  const product = data?.product;
+  const current = product?.niches?.split(",").map(s => s.trim()).filter(Boolean) ?? [];
+  const [draft, setDraft] = useState(current.join(", "));
+  const [saved, setSaved] = useState(false);
+
+  const update = useMutation({
+    mutationFn: (niches: string) => api.updateProduct(productId, { niches }),
+    onSuccess: () => {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      queryClient.invalidateQueries({ queryKey: ["product", productId] });
+    },
+  });
+
+  return (
+    <section className="mt-6 bg-card border border-border rounded-lg p-5 space-y-3">
+      <div>
+        <h3 className="text-base font-medium">Sub-nichos (opcional)</h3>
+        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+          Quando o produto serve multiplos nichos (ex: advocacia, contabilidade, engenharia), o
+          planner gera 1 estrutura de campanha POR nicho. Se vazio, planner trata como funil unico.
+        </p>
+      </div>
+      <div className="flex flex-col md:flex-row md:items-end gap-3">
+        <div className="flex-1">
+          <label className="text-xs text-muted-foreground">Nichos (separados por virgula)</label>
+          <input
+            type="text"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="ex: advocacia, contabilidade, engenharia"
+            className="w-full mt-1 px-2.5 py-1.5 bg-input border border-border rounded text-sm"
+          />
+        </div>
+        <button
+          onClick={() => update.mutate(draft.trim() || "")}
+          disabled={update.isPending}
+          className="px-4 py-1.5 bg-primary text-primary-foreground rounded text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+        >
+          {update.isPending ? "salvando…" : "Salvar"}
+        </button>
+        {saved && <span className="text-xs text-success self-center">salvo</span>}
+      </div>
+      {current.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-2 border-t border-border">
+          {current.map(n => (
+            <span key={n} className="text-[11px] px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/30">
+              {n}
+            </span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -60,6 +60,8 @@ export interface ProductAutomationConfig {
   budgetFloorProspection: number;
   budgetFloorRemarketing: number;
   daypartingEnabled: boolean;
+  calibratedFromRealData: boolean;
+  calibratedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +90,7 @@ export interface ProductDetail {
   defaultCTA: string;
   autoActivate: boolean;
   supervisedMode: boolean;
+  niches: string | null;
   automationConfig: ProductAutomationConfig | null;
 }
 
@@ -106,6 +109,7 @@ export interface NewProductInput {
   defaultCTA: string;
   autoActivate: boolean;
   supervisedMode: boolean;
+  niches?: string;
 }
 
 export interface CampaignListItem {

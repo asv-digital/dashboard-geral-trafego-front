@@ -36,6 +36,31 @@ export default function MethodPage({
         </div>
       ) : (
         <>
+          {cfg.calibratedFromRealData && (
+            <div className="bg-success/10 border border-success/40 rounded-lg p-4 flex items-start gap-3">
+              <span className="text-success text-base leading-none mt-0.5">✓</span>
+              <div className="text-sm">
+                <div className="font-medium text-success">
+                  Calibrado com dados reais
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Thresholds ajustados a partir de campanhas top performer da conta:
+                  Advogados R$ 52 CPA · Contadores R$ 69 · Mirror Winners R$ 88 · ROAS top 2.13x.
+                  Versao teorica conservadora foi substituida.
+                  {cfg.calibratedAt && (
+                    <span className="ml-1">
+                      ({new Date(cfg.calibratedAt).toLocaleDateString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                      })})
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Filosofia */}
           <Quote
             text="Métrica do dia mente, média de 7 fala verdade."

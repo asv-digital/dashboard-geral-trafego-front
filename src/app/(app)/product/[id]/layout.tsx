@@ -89,10 +89,41 @@ export default function ProductLayout({
     queryKey: ["product", id],
     queryFn: () => api.getProduct(id),
   });
+  const { data: overview } = useQuery({
+    queryKey: ["global", "overview", 7],
+    queryFn: () => api.globalOverview(7),
+    refetchInterval: 5 * 60_000,
+  });
+  const { data: campaigns } = useQuery({
+    queryKey: ["campaigns", id],
+    queryFn: () => api.listCampaigns(id),
+    refetchInterval: 5 * 60_000,
+  });
+  const { data: highTicket } = useQuery({
+    queryKey: ["high-ticket", "list", id],
+    queryFn: () => api.listHighTicketSales(id, 90),
+    refetchInterval: 5 * 60_000,
+  });
 
   const product = data?.product;
   const activeGroup = findActiveGroup(pathname, id);
   const showSubtabs = activeGroup.subs.length > 1;
+
+  // Badges por grupo
+  const productOverview = overview?.products.find(p => p.productId === id);
+  const alertsCount = productOverview?.alerts ?? 0;
+  const campaignsCount = campaigns?.campaigns.filter(c => c.status === "Ativa").length ?? 0;
+  const highTicketCount = highTicket?.items.length ?? 0;
+
+  const badgeFor = (slug: string): { count: number; tone: "danger" | "info" | "muted" } | null => {
+    if (slug === "realtime" && alertsCount > 0)
+      return { count: alertsCount, tone: "danger" };
+    if (slug === "campaigns" && campaignsCount > 0)
+      return { count: campaignsCount, tone: "info" };
+    if (slug === "high-ticket" && highTicketCount > 0)
+      return { count: highTicketCount, tone: "info" };
+    return null;
+  };
 
   return (
     <div>
@@ -124,18 +155,33 @@ export default function ProductLayout({
           {TAB_GROUPS.map(group => {
             const href = `/product/${id}${group.slug ? `/${group.slug}` : ""}`;
             const active = group === activeGroup;
+            const badge = badgeFor(group.slug);
             return (
               <Link
                 key={group.label}
                 href={href}
                 className={cn(
-                  "px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap",
+                  "px-4 py-2.5 text-sm border-b-2 -mb-px transition-colors whitespace-nowrap inline-flex items-center gap-1.5",
                   active
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
                 {group.label}
+                {badge && (
+                  <span
+                    className={cn(
+                      "text-[10px] tabular-nums px-1.5 py-0.5 rounded leading-none",
+                      badge.tone === "danger"
+                        ? "bg-destructive/15 text-destructive border border-destructive/30"
+                        : badge.tone === "info"
+                          ? "bg-info/15 text-info border border-info/30"
+                          : "bg-muted text-muted-foreground border border-border",
+                    )}
+                  >
+                    {badge.count}
+                  </span>
+                )}
               </Link>
             );
           })}

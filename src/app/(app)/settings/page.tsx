@@ -10,6 +10,9 @@ import {
   type NotificationConfig,
   type NotificationConfigInput,
 } from "@/lib/api";
+import { PageHeader } from "@/components/ui/page-header";
+import { Accordion } from "@/components/ui/accordion";
+import { StatusBadge, type Tone } from "@/components/ui/status-badge";
 
 const DEFAULT_NOTIFICATION_CONFIG: NotificationConfig = {
   whatsappProvider: "zappfy",
@@ -198,40 +201,56 @@ export default function SettingsPage() {
     );
   }
 
+  // Status calculados pra cada accordion
+  const metaAdAccountStatus: { tone: Tone; label: string } = account?.active
+    ? { tone: "success", label: "Conta ativa" }
+    : account
+      ? { tone: "danger", label: account.status_key }
+      : { tone: "muted", label: "Carregando" };
+  const pixelPageStatus: { tone: Tone; label: string } =
+    metaForm.metaPixelId && metaForm.metaPageId
+      ? { tone: "success", label: "Configurado" }
+      : { tone: "warning", label: "Incompleto" };
+  const integrationsStatus: { tone: Tone; label: string } =
+    metaForm.kirvanoWebhookToken && metaForm.anthropicApiKey
+      ? { tone: "success", label: "Configurado" }
+      : { tone: "warning", label: "Parcial" };
+  const whatsappStatus: { tone: Tone; label: string } =
+    form.whatsappToken && form.whatsappPhone
+      ? { tone: "success", label: "Configurado" }
+      : { tone: "muted", label: "Nao configurado" };
+  const healthStatus: { tone: Tone; label: string } = health
+    ? health.status === "healthy"
+      ? { tone: "success", label: "Saudavel" }
+      : health.status === "degraded"
+        ? { tone: "warning", label: "Degradado" }
+        : { tone: "danger", label: "Critico" }
+    : { tone: "muted", label: "Carregando" };
+
   return (
-    <div className="p-8 space-y-6 max-w-3xl">
-      <h1 className="text-2xl font-heading font-semibold">Configurações</h1>
+    <div className="p-6 md:p-8 space-y-4 max-w-3xl">
+      <PageHeader
+        title="Configuracoes"
+        subtitle="Credenciais, integracoes e saude do sistema. Agrupado por tema — clica pra expandir."
+      />
 
-      <section className="bg-card border border-border rounded-lg p-5">
-        <h2 className="text-sm font-medium">Usuário</h2>
-        {me?.user && (
-          <div className="mt-3 text-sm space-y-1">
-            <div>
-              <span className="text-muted-foreground">Nome: </span>
-              {me.user.name}
-            </div>
-            <div>
-              <span className="text-muted-foreground">Email: </span>
-              {me.user.email}
-            </div>
-            <div>
-              <span className="text-muted-foreground">Role: </span>
-              {me.user.role}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="bg-card border border-border rounded-lg p-5">
-        <h2 className="text-sm font-medium">Ad account Meta</h2>
-        {account ? (
-          <div className="mt-3 text-sm space-y-1">
-            <div>
-              <span className="text-muted-foreground">Status: </span>
-              <span className={account.active ? "text-success" : "text-destructive"}>
-                {account.status_key}
-              </span>
-            </div>
+      {/* Conta Meta — sempre aberto pra ver status */}
+      <Accordion
+        title="Conta Meta Ads"
+        description="Status da conta de anuncios + access token"
+        status={metaAdAccountStatus.tone}
+        statusLabel={metaAdAccountStatus.label}
+        defaultOpen
+      >
+        <div className="space-y-4">
+          {account && (
+            <div className="text-sm space-y-1 p-3 bg-background/40 border border-border rounded">
+              <div>
+                <span className="text-muted-foreground">Status: </span>
+                <span className={account.active ? "text-success" : "text-destructive"}>
+                  {account.status_key}
+                </span>
+              </div>
             <div>
               <span className="text-muted-foreground">Conta: </span>
               {account.name || "—"}
@@ -242,47 +261,47 @@ export default function SettingsPage() {
             </div>
             <div className="text-xs text-muted-foreground mt-1">{account.message}</div>
           </div>
-        ) : (
-          <div className="mt-3 text-sm text-muted-foreground">carregando…</div>
-        )}
-      </section>
+          )}
 
-      <section className="bg-card border border-border rounded-lg p-5">
-        <h2 className="text-sm font-medium mb-4">Meta + integrações globais</h2>
+          <form onSubmit={handleGlobalSave} className="space-y-3">
+            <TextField
+              label="Meta access token"
+              value={metaForm.metaAccessToken || ""}
+              onChange={value => setGlobalField("metaAccessToken", value)}
+              placeholder="EAAB..."
+              type="password"
+            />
+            <TextField
+              label="Data de criacao do token"
+              value={toDateTimeLocalInput(metaForm.metaTokenCreatedAt)}
+              onChange={value => setGlobalField("metaTokenCreatedAt", value)}
+              type="datetime-local"
+            />
+            <TokenExpiryBadge createdAt={metaForm.metaTokenCreatedAt} />
+            <TextField
+              label="Ad account ID"
+              value={metaForm.metaAdAccountId || ""}
+              onChange={value => setGlobalField("metaAdAccountId", value)}
+              placeholder="act_..."
+            />
+            <SaveBar
+              pending={updateGlobalSettings.isPending}
+              saved={globalSaved}
+              error={globalSaveError}
+              label="Salvar conta + token"
+            />
+          </form>
+        </div>
+      </Accordion>
+
+      {/* Pixel + Page + Audiences */}
+      <Accordion
+        title="Pixel + Page + Audiences"
+        description="Configuracoes que abastecem o Planner e o tracking"
+        status={pixelPageStatus.tone}
+        statusLabel={pixelPageStatus.label}
+      >
         <form onSubmit={handleGlobalSave} className="space-y-3">
-          <TextField
-            label="Meta access token"
-            value={metaForm.metaAccessToken || ""}
-            onChange={value => setGlobalField("metaAccessToken", value)}
-            placeholder="EAAB..."
-            type="password"
-          />
-          <TextField
-            label="Data de criação do token"
-            value={toDateTimeLocalInput(metaForm.metaTokenCreatedAt)}
-            onChange={value => setGlobalField("metaTokenCreatedAt", value)}
-            type="datetime-local"
-          />
-          <TokenExpiryBadge createdAt={metaForm.metaTokenCreatedAt} />
-          <TextField
-            label="Ad account ID"
-            value={metaForm.metaAdAccountId || ""}
-            onChange={value => setGlobalField("metaAdAccountId", value)}
-            placeholder="act_..."
-          />
-          <TextField
-            label="Meta App ID"
-            value={metaForm.metaAppId || ""}
-            onChange={value => setGlobalField("metaAppId", value)}
-            placeholder="app id opcional"
-          />
-          <TextField
-            label="Meta App Secret"
-            value={metaForm.metaAppSecret || ""}
-            onChange={value => setGlobalField("metaAppSecret", value)}
-            placeholder="app secret opcional"
-            type="password"
-          />
           <TextField
             label="Pixel ID default"
             value={metaForm.metaPixelId || ""}
@@ -296,7 +315,7 @@ export default function SettingsPage() {
             placeholder="615..."
           />
           <TextField
-            label="Audiência compradores ID"
+            label="Audiencia compradores ID"
             value={metaForm.metaAudienceBuyersId || ""}
             onChange={value => setGlobalField("metaAudienceBuyersId", value)}
             placeholder="238..."
@@ -308,47 +327,71 @@ export default function SettingsPage() {
             placeholder="ex: 2384..."
           />
           <TextField
-            label="Nome da audiência quente"
+            label="Nome da audiencia quente"
             value={metaForm.metaAudienceWarmName || ""}
             onChange={value => setGlobalField("metaAudienceWarmName", value)}
             placeholder="Visitantes 30d"
+          />
+          <SaveBar
+            pending={updateGlobalSettings.isPending}
+            saved={globalSaved}
+            error={globalSaveError}
+            label="Salvar Pixel + Page + Audiences"
+          />
+        </form>
+      </Accordion>
+
+      {/* App Meta + Integracoes (Kirvano + IA) */}
+      <Accordion
+        title="App Meta + Integracoes (Kirvano, IA)"
+        description="Meta App ID/Secret (CAPI), Kirvano webhook token, IA"
+        status={integrationsStatus.tone}
+        statusLabel={integrationsStatus.label}
+      >
+        <form onSubmit={handleGlobalSave} className="space-y-3">
+          <TextField
+            label="Meta App ID"
+            value={metaForm.metaAppId || ""}
+            onChange={value => setGlobalField("metaAppId", value)}
+            placeholder="app id (opcional pra CAPI)"
+          />
+          <TextField
+            label="Meta App Secret"
+            value={metaForm.metaAppSecret || ""}
+            onChange={value => setGlobalField("metaAppSecret", value)}
+            placeholder="app secret (opcional)"
+            type="password"
           />
           <TextField
             label="Kirvano webhook token"
             value={metaForm.kirvanoWebhookToken || ""}
             onChange={value => setGlobalField("kirvanoWebhookToken", value)}
-            placeholder="token opcional"
+            placeholder="token (preenchido)"
             type="password"
           />
           <TextField
-            label="Anthropic API key"
+            label="Anthropic API key (legado — ative GOOGLE_AI_API_KEY no env do back pra usar Gemini gratis)"
             value={metaForm.anthropicApiKey || ""}
             onChange={value => setGlobalField("anthropicApiKey", value)}
             placeholder="sk-ant-..."
             type="password"
           />
-
-          <div className="flex items-center gap-3 pt-2 border-t border-border">
-            <button
-              type="submit"
-              disabled={updateGlobalSettings.isPending}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {updateGlobalSettings.isPending ? "salvando…" : "Salvar audiência"}
-            </button>
-            {globalSaved && <span className="text-xs text-success">✓ salvo</span>}
-            {globalSaveError && (
-              <span className="text-xs text-destructive">{globalSaveError}</span>
-            )}
-          </div>
-          <div className="text-xs text-muted-foreground">
-            Essas credenciais agora abastecem preflight, planner, webhook e healthcheck.
-          </div>
+          <SaveBar
+            pending={updateGlobalSettings.isPending}
+            saved={globalSaved}
+            error={globalSaveError}
+            label="Salvar integracoes"
+          />
         </form>
-      </section>
+      </Accordion>
 
-      <section className="bg-card border border-border rounded-lg p-5">
-        <h2 className="text-sm font-medium mb-4">Notificações WhatsApp</h2>
+      {/* Notificacoes WhatsApp */}
+      <Accordion
+        title="Notificacoes WhatsApp"
+        description="Alertas em tempo real via Zappfy/Z-API"
+        status={whatsappStatus.tone}
+        statusLabel={whatsappStatus.label}
+      >
         <form onSubmit={handleSave} className="space-y-3">
           <TextField
             label="Provider"
@@ -438,12 +481,16 @@ export default function SettingsPage() {
             )}
           </div>
         </form>
-      </section>
+      </Accordion>
 
-      <section className="bg-card border border-border rounded-lg p-5">
-        <h2 className="text-sm font-medium mb-4">Log de notificações (últimas 50)</h2>
+      <Accordion
+        title="Log de notificacoes"
+        description={`Ultimas ${notificationLogs.length} notificacoes disparadas`}
+        status={notificationLogs.length > 0 ? "info" : "muted"}
+        statusLabel={notificationLogs.length > 0 ? `${notificationLogs.length} logs` : "vazio"}
+      >
         {notificationLogs.length === 0 ? (
-          <div className="text-xs text-muted-foreground">nenhuma notificação ainda</div>
+          <div className="text-xs text-muted-foreground">nenhuma notificacao ainda</div>
         ) : (
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {notificationLogs.map(log => (
@@ -466,10 +513,15 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
-      </section>
+      </Accordion>
 
-      <section className="bg-card border border-border rounded-lg p-5">
-        <h2 className="text-sm font-medium mb-3">Saúde do sistema</h2>
+      <Accordion
+        title="Saude do sistema"
+        description="Status de cada componente em tempo real"
+        status={healthStatus.tone}
+        statusLabel={healthStatus.label}
+        defaultOpen
+      >
         {health ? (
           <div className="space-y-1">
             <div className="text-sm">
@@ -517,7 +569,52 @@ export default function SettingsPage() {
         ) : (
           <div className="text-sm text-muted-foreground">carregando…</div>
         )}
-      </section>
+      </Accordion>
+
+      <Accordion title="Usuario" description="Conta logada">
+        {me?.user && (
+          <div className="text-sm space-y-1">
+            <div>
+              <span className="text-muted-foreground">Nome: </span>
+              {me.user.name}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Email: </span>
+              {me.user.email}
+            </div>
+            <div>
+              <span className="text-muted-foreground">Role: </span>
+              <StatusBadge tone="info" label={me.user.role} size="sm" />
+            </div>
+          </div>
+        )}
+      </Accordion>
+    </div>
+  );
+}
+
+function SaveBar({
+  pending,
+  saved,
+  error,
+  label,
+}: {
+  pending: boolean;
+  saved: boolean;
+  error: string | null;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 pt-3 border-t border-border">
+      <button
+        type="submit"
+        disabled={pending}
+        className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+      >
+        {pending ? "salvando…" : label}
+      </button>
+      {saved && <span className="text-xs text-success">salvo</span>}
+      {error && <span className="text-xs text-destructive">{error}</span>}
     </div>
   );
 }

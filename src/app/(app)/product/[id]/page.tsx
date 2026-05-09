@@ -98,6 +98,41 @@ export default function ProductOverviewPage({
     refetchInterval: 10 * 60_000,
   });
 
+  // Sparklines pra KPIs hero (14d cada)
+  const tsCpa = useQuery({
+    queryKey: ["analytics", "ts", id, "cpa", 14],
+    queryFn: () => api.timeseries(id, "cpa", 14),
+    refetchInterval: 10 * 60_000,
+  });
+  const tsRoas = useQuery({
+    queryKey: ["analytics", "ts", id, "roas", 14],
+    queryFn: () => api.timeseries(id, "roas", 14),
+    refetchInterval: 10 * 60_000,
+  });
+  const tsSales = useQuery({
+    queryKey: ["analytics", "ts", id, "sales", 14],
+    queryFn: () => api.timeseries(id, "sales", 14),
+    refetchInterval: 10 * 60_000,
+  });
+  const tsHook = useQuery({
+    queryKey: ["analytics", "ts", id, "hookRate", 14],
+    queryFn: () => api.timeseries(id, "hookRate", 14),
+    refetchInterval: 10 * 60_000,
+  });
+  const tsCm = useQuery({
+    queryKey: ["analytics", "ts", id, "cm", 14],
+    queryFn: () => api.timeseries(id, "cm", 14),
+    refetchInterval: 10 * 60_000,
+  });
+
+  const sparklines: Record<string, number[]> = {
+    cpa: tsCpa.data?.points.map(p => p.value ?? 0) ?? [],
+    roas: tsRoas.data?.points.map(p => p.value ?? 0) ?? [],
+    sales: tsSales.data?.points.map(p => p.value ?? 0) ?? [],
+    hookRate: tsHook.data?.points.map(p => p.value ?? 0) ?? [],
+    profit: tsCm.data?.points.map(p => p.value ?? 0) ?? [],
+  };
+
   const briefingRefresh = useMutation({
     mutationFn: () => api.briefing(id, true),
     onSuccess: data => {
@@ -133,14 +168,15 @@ export default function ProductOverviewPage({
         </div>
       </section>
 
-      {/* ZONA 2 — 6 KPIs hero essenciais (financeiro + Sobral way) */}
+      {/* ZONA 2 — 6 KPIs hero essenciais com sparkline 14d */}
       <HeroKpisGrid
         data={heroKpis.data}
         loading={heroKpis.isLoading}
         keys={["profit", "sales", "cpa", "roas", "hookRate", "frequency"]}
+        sparklines={sparklines}
       />
 
-      {/* ZONA 3 — Briefing IA (2/3) + Pacing + Proximas acoes (1/3) */}
+      {/* ZONA 3 — Briefing IA (2/3) + Pacing gauge + Proximas acoes (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
           <BriefingCard
@@ -151,15 +187,18 @@ export default function ProductOverviewPage({
           />
         </div>
         <div className="space-y-4">
-          <PacingCard data={pace.data} loading={pace.isLoading} compact />
+          <PacingGaugeCard data={pace.data} loading={pace.isLoading} />
           <DecisionQueuePreview data={decisions.data} loading={decisions.isLoading} />
         </div>
       </div>
 
-      {/* ZONA 4 — 4 charts 2x2 (tendencia financeira) */}
+      {/* ZONA 4 — Awareness mismatch (sinal Schwartz) */}
+      <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} />
+
+      {/* ZONA 5 — 4 charts 2x2 (tendencia financeira detalhada) */}
       <div>
         <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-          Tendencia financeira
+          Tendencia financeira (14 dias)
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard productId={id} metric="cpa" title="CPA" subtitle="ideal: estavel ou caindo" format="brl" days={Math.max(days, 14)} />
@@ -168,9 +207,158 @@ export default function ProductOverviewPage({
           <ChartCard productId={id} metric="spend" title="Gasto/dia" subtitle="vs target diario do produto" format="brl" type="bar" days={Math.max(days, 14)} />
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* ZONA 5 — Awareness mismatch (sinal Schwartz) */}
-      <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} />
+function PacingGaugeCard({
+  data,
+  loading,
+}: {
+  data: MonthlyPaceResponse | undefined;
+  loading: boolean;
+}) {
+  return (
+    <section className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-baseline justify-between gap-2 mb-3">
+        <h3 className="text-xs uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1">
+          Pacing mensal
+        </h3>
+        {data && data.status !== "no_goal" && (
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            D{data.dayOfMonth}/{data.daysInMonth}
+          </span>
+        )}
+      </div>
+      {loading || !data ? (
+        <SkeletonLines lines={3} />
+      ) : data.status === "no_goal" ? (
+        <div className="text-xs text-muted-foreground italic">
+          Sem meta cadastrada — agente nao ajusta pacing.
+        </div>
+      ) : (
+        <PacingGauge
+          current={data.currentSales}
+          target={data.targetSales ?? 0}
+          status={data.status}
+          dayOfMonth={data.dayOfMonth}
+          daysInMonth={data.daysInMonth}
+          requiredDailySales={data.requiredDailySales}
+          daysLeft={data.daysLeft ?? 0}
+        />
+      )}
+    </section>
+  );
+}
+
+function PacingGauge({
+  current,
+  target,
+  status,
+  dayOfMonth,
+  daysInMonth,
+  requiredDailySales,
+  daysLeft,
+}: {
+  current: number;
+  target: number;
+  status: PaceStatus;
+  dayOfMonth: number;
+  daysInMonth: number;
+  requiredDailySales: number | null;
+  daysLeft: number;
+}) {
+  const pct = Math.min(100, (current / Math.max(target, 1)) * 100);
+  const expectedPct = (dayOfMonth / daysInMonth) * 100;
+  const tone = PACE_TONE[status];
+  const colorVar =
+    tone === "success"
+      ? "var(--color-success)"
+      : tone === "warning"
+        ? "var(--color-warning)"
+        : "var(--color-destructive)";
+  const radius = 52;
+  const circ = 2 * Math.PI * radius;
+  const dashCurrent = (pct / 100) * circ;
+  const dashExpected = (expectedPct / 100) * circ;
+  const sizePx = 132;
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <svg width={sizePx} height={sizePx} viewBox={`0 0 ${sizePx} ${sizePx}`} className="shrink-0">
+          {/* track */}
+          <circle
+            cx={sizePx / 2}
+            cy={sizePx / 2}
+            r={radius}
+            fill="none"
+            stroke="var(--color-border)"
+            strokeWidth={10}
+          />
+          {/* expected (cinza) */}
+          <circle
+            cx={sizePx / 2}
+            cy={sizePx / 2}
+            r={radius}
+            fill="none"
+            stroke="var(--color-muted-foreground)"
+            strokeOpacity={0.25}
+            strokeWidth={2}
+            strokeDasharray={`${dashExpected} ${circ}`}
+            transform={`rotate(-90 ${sizePx / 2} ${sizePx / 2})`}
+          />
+          {/* current */}
+          <circle
+            cx={sizePx / 2}
+            cy={sizePx / 2}
+            r={radius}
+            fill="none"
+            stroke={colorVar}
+            strokeWidth={10}
+            strokeLinecap="round"
+            strokeDasharray={`${dashCurrent} ${circ}`}
+            transform={`rotate(-90 ${sizePx / 2} ${sizePx / 2})`}
+          />
+          {/* texto centro */}
+          <text
+            x={sizePx / 2}
+            y={sizePx / 2 - 4}
+            textAnchor="middle"
+            className="font-heading font-semibold fill-foreground"
+            style={{ fontSize: 22 }}
+          >
+            {current}
+          </text>
+          <text
+            x={sizePx / 2}
+            y={sizePx / 2 + 14}
+            textAnchor="middle"
+            className="fill-muted-foreground"
+            style={{ fontSize: 10 }}
+          >
+            / {target}
+          </text>
+        </svg>
+        <div className="text-[11px] text-muted-foreground space-y-1 min-w-0">
+          <div>
+            <StatusBadge tone={tone} label={PACE_LABEL[status]} dot size="sm" />
+          </div>
+          <div className="tabular-nums">
+            {pct.toFixed(0)}% da meta
+          </div>
+          <div className="tabular-nums text-muted-foreground/70">
+            esperado: {expectedPct.toFixed(0)}%
+          </div>
+          {requiredDailySales !== null && (
+            <div className="tabular-nums">
+              precisa <span className="text-foreground">{requiredDailySales}/d</span>
+            </div>
+          )}
+          <div className="tabular-nums text-muted-foreground/70">
+            restam {daysLeft}d
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -181,16 +369,18 @@ function HeroKpisGrid({
   data,
   loading,
   keys,
+  sparklines,
 }: {
   data: HeroKpisResponse | undefined;
   loading: boolean;
   keys?: string[];
+  sparklines?: Record<string, number[]>;
 }) {
   if (loading || !data) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {Array.from({ length: keys?.length ?? 6 }).map((_, i) => (
-          <div key={i} className="h-24 bg-card border border-border rounded-lg animate-pulse" />
+          <div key={i} className="h-32 bg-card border border-border rounded-lg animate-pulse" />
         ))}
       </div>
     );
@@ -207,6 +397,7 @@ function HeroKpisGrid({
           delta={kpi.delta}
           deltaDirection={kpi.direction}
           tooltipTerm={kpi.key}
+          sparkline={sparklines?.[kpi.key]?.filter(v => Number.isFinite(v)) ?? undefined}
         />
       ))}
     </div>

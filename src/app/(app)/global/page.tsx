@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   api,
   type GlobalPnlProduct,
@@ -49,6 +50,11 @@ export default function GlobalPage() {
   };
   const products = pnl?.products ?? [];
 
+  const profitableCount = products.filter(p => p.profit > 0).length;
+  const criticalCount = (overview?.products ?? []).filter(p => p.health === "critico").length;
+  const trendingUp = products.filter(p => trendScore(p) >= 5).length;
+  const trendingDown = products.filter(p => trendScore(p) <= -5).length;
+
   return (
     <div className="p-6 md:p-8 space-y-8">
       <PageHeader
@@ -56,6 +62,34 @@ export default function GlobalPage() {
         subtitle={`Ultimos ${days === 1 ? "1 dia" : `${days} dias`} · todos os produtos`}
         actions={<PeriodPicker value={days} onChange={setDays} />}
       />
+
+      {products.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 -mt-2">
+          <PulseBadge
+            tone={profitableCount > 0 ? "success" : "muted"}
+            label={`${profitableCount}/${products.length} lucrando`}
+            pulse={profitableCount > 0}
+          />
+          {trendingUp > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-success">
+              <TrendingUp className="w-3 h-3" />
+              {trendingUp} em alta
+            </span>
+          )}
+          {trendingDown > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
+              <TrendingDown className="w-3 h-3" />
+              {trendingDown} em queda
+            </span>
+          )}
+          {criticalCount > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-destructive">
+              <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
+              {criticalCount} {criticalCount === 1 ? "crítico" : "críticos"}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
@@ -247,6 +281,15 @@ function ProductsTable({
         </span>
       ),
     },
+    {
+      key: "trend",
+      label: "Tendência",
+      align: "center",
+      sortable: true,
+      sortValue: row => trendScore(row),
+      exportValue: row => trendLabel(row),
+      render: row => <TrendBadge product={row} />,
+    },
   ];
 
   return (
@@ -257,6 +300,69 @@ function ProductsTable({
       exportFilename="pnl-produtos.csv"
       initialSort={{ key: "profit", dir: "desc" }}
     />
+  );
+}
+
+function PulseBadge({
+  tone,
+  label,
+  pulse,
+}: {
+  tone: "success" | "muted";
+  label: string;
+  pulse: boolean;
+}) {
+  const cls =
+    tone === "success"
+      ? "bg-success/10 text-success border-success/30"
+      : "bg-muted/40 text-muted-foreground border-border";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium ${cls}`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${tone === "success" ? "bg-success" : "bg-muted-foreground"} ${pulse ? "animate-pulse" : ""}`}
+      />
+      {label}
+    </span>
+  );
+}
+
+function trendScore(row: GlobalPnlProduct): number {
+  const prev = row.previous.profit;
+  const cur = row.profit;
+  if (prev === 0 && cur === 0) return 0;
+  if (prev === 0) return cur > 0 ? 100 : -100;
+  return ((cur - prev) / Math.abs(prev)) * 100;
+}
+
+function trendLabel(row: GlobalPnlProduct): string {
+  const s = trendScore(row);
+  if (Math.abs(s) < 5) return "estavel";
+  return s > 0 ? `+${s.toFixed(0)}%` : `${s.toFixed(0)}%`;
+}
+
+function TrendBadge({ product }: { product: GlobalPnlProduct }) {
+  const score = trendScore(product);
+  const stable = Math.abs(score) < 5;
+  const up = !stable && score > 0;
+  const Icon = stable ? Minus : up ? TrendingUp : TrendingDown;
+  const tone = stable
+    ? "text-muted-foreground bg-muted/40 border-border"
+    : up
+      ? "text-success bg-success/10 border-success/30"
+      : "text-destructive bg-destructive/10 border-destructive/30";
+  const label = stable
+    ? "estável"
+    : `${score > 0 ? "+" : ""}${score.toFixed(0)}%`;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium tabular-nums ${tone}`}
+      title={`Lucro vs período anterior: ${formatBRL(product.previous.profit)} → ${formatBRL(product.profit)}`}
+    >
+      <Icon className="w-3 h-3" />
+      {label}
+    </span>
   );
 }
 

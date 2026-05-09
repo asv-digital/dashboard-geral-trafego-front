@@ -35,6 +35,7 @@ export function KpiCard({
   className,
   tooltipTerm,
   tooltipText,
+  sparkline,
 }: {
   label: string;
   value: string;
@@ -46,6 +47,7 @@ export function KpiCard({
   className?: string;
   tooltipTerm?: string;
   tooltipText?: string;
+  sparkline?: number[];
 }) {
   const dt = deltaTone(delta, deltaDirection);
   const valueCls =
@@ -75,7 +77,51 @@ export function KpiCard({
       >
         {value}
       </div>
+      {sparkline && sparkline.length > 1 && (
+        <Sparkline values={sparkline} tone={tone ?? dt} />
+      )}
       {hint && <div className="text-[11px] text-muted-foreground mt-1">{hint}</div>}
     </div>
+  );
+}
+
+function Sparkline({ values, tone }: { values: number[]; tone: Tone }) {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const w = 100;
+  const h = 24;
+  const points = values
+    .map((v, i) => {
+      const x = (i / (values.length - 1)) * w;
+      const y = h - ((v - min) / range) * h;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+  const stroke =
+    tone === "success"
+      ? "var(--color-success)"
+      : tone === "danger"
+        ? "var(--color-destructive)"
+        : tone === "warning"
+          ? "var(--color-warning)"
+          : tone === "info"
+            ? "var(--color-info)"
+            : "currentColor";
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="w-full h-6 mt-1.5 opacity-70"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke={stroke}
+        strokeWidth={1.4}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }

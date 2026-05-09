@@ -259,8 +259,8 @@ function CreativeCard({
 
           {genError && (
             <div className="text-[11px] text-destructive">
-              {genError === "anthropic_not_configured"
-                ? "Anthropic nao configurado. Setta a chave em /settings."
+              {genError === "llm_not_configured" || genError === "anthropic_not_configured"
+                ? "Provider de IA nao configurado. Setta GOOGLE_AI_API_KEY ou anthropicApiKey."
                 : genError === "asset_type_not_supported"
                   ? "Tipo de asset nao suportado."
                   : `Falha: ${genError}`}

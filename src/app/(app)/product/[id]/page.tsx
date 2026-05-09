@@ -15,7 +15,6 @@ import {
 } from "recharts";
 import {
   api,
-  type ActionLogItem,
   type AwarenessMismatchesResponse,
   type BriefingResponse,
   type CeoReportResponse,
@@ -28,11 +27,11 @@ import {
   type PaceStatus,
   type TimeseriesMetric,
 } from "@/lib/api";
-import { formatBRL, formatNumber, formatRelativeTime } from "@/lib/format";
+import { formatBRL, formatNumber } from "@/lib/format";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { PeriodPicker } from "@/components/ui/period-picker";
 import { PulseLine } from "@/components/ui/pulse-line";
-import { StatusBadge, StatusDot, type Tone } from "@/components/ui/status-badge";
+import { StatusBadge, type Tone } from "@/components/ui/status-badge";
 
 const PACE_TONE: Record<PaceStatus, Tone> = {
   ahead: "success",
@@ -88,11 +87,6 @@ export default function ProductOverviewPage({
     queryFn: () => api.agentHeartbeats(),
     refetchInterval: 60_000,
   });
-  const recentActions = useQuery({
-    queryKey: ["actions", id, 8],
-    queryFn: () => api.listActions(id, { limit: 8 }),
-    refetchInterval: 60_000,
-  });
   const pace = useQuery({
     queryKey: ["analytics", "monthly-pace", id],
     queryFn: () => api.monthlyPace(id),
@@ -113,39 +107,40 @@ export default function ProductOverviewPage({
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
-      {/* Topo: Pulse line + acoes */}
-      <div className="flex items-start gap-3 flex-wrap">
-        <div className="flex-1 min-w-[280px]">
-          {pulse.data ? (
-            <PulseLine
-              tone={pulse.data.tone}
-              message={pulse.data.message}
-              detail={pulse.data.detail}
+      {/* ZONA 1 — Pulse + acoes + periodo */}
+      <section className="space-y-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="flex-1 min-w-[280px]">
+            {pulse.data ? (
+              <PulseLine
+                tone={pulse.data.tone}
+                message={pulse.data.message}
+                detail={pulse.data.detail}
+              />
+            ) : (
+              <div className="rounded-lg border border-border bg-card h-[68px] animate-pulse" />
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <PeriodPicker value={days} onChange={setDays} />
+            <CeoReportButton productId={id} days={days} />
+            <EmergencyStopButton productId={id} />
+            <AgentStatusPill
+              heartbeat={heartbeats.data?.heartbeats.find(h => h.productId === id)}
+              supervisedMode={!!product.data?.product?.supervisedMode}
             />
-          ) : (
-            <div className="rounded-lg border border-border bg-card h-[60px] animate-pulse" />
-          )}
+          </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <PeriodPicker value={days} onChange={setDays} />
-          <CeoReportButton productId={id} days={days} />
-          <EmergencyStopButton productId={id} />
-        </div>
-      </div>
+      </section>
 
-      {/* Hero KPIs primarios */}
-      <HeroKpisGrid data={heroKpis.data} loading={heroKpis.isLoading} group="primary" />
+      {/* ZONA 2 — 6 KPIs hero essenciais (financeiro + Sobral way) */}
+      <HeroKpisGrid
+        data={heroKpis.data}
+        loading={heroKpis.isLoading}
+        keys={["profit", "sales", "cpa", "roas", "hookRate", "frequency"]}
+      />
 
-      {/* Hero KPIs secundarios (Sobral way) */}
-      <HeroKpisGrid data={heroKpis.data} loading={heroKpis.isLoading} group="secondary" />
-
-      {/* Pacing + Mismatches (Roadmap Sobral 1, 2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PacingCard data={pace.data} loading={pace.isLoading} />
-        <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} />
-      </div>
-
-      {/* Status Agente + Briefing IA */}
+      {/* ZONA 3 — Briefing IA (2/3) + Pacing + Proximas acoes (1/3) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
           <BriefingCard
@@ -155,27 +150,27 @@ export default function ProductOverviewPage({
             onRefresh={() => briefingRefresh.mutate()}
           />
         </div>
-        <AgentStatusCard
-          productId={id}
-          heartbeat={heartbeats.data?.heartbeats.find(h => h.productId === id)}
-          loading={heartbeats.isLoading}
-          supervisedMode={!!product.data?.product?.supervisedMode}
-        />
+        <div className="space-y-4">
+          <PacingCard data={pace.data} loading={pace.isLoading} compact />
+          <DecisionQueuePreview data={decisions.data} loading={decisions.isLoading} />
+        </div>
       </div>
 
-      {/* 4 charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ChartCard productId={id} metric="cpa" title="CPA" subtitle="ideal: estavel ou caindo" format="brl" days={Math.max(days, 14)} />
-        <ChartCard productId={id} metric="roas" title="ROAS" subtitle="meta: >= 1.6x sustentado" format="x" days={Math.max(days, 14)} />
-        <ChartCard productId={id} metric="sales" title="Vendas/dia" subtitle="atribuicao Kirvano webhook" format="num" type="bar" days={Math.max(days, 14)} />
-        <ChartCard productId={id} metric="spend" title="Gasto/dia" subtitle="vs target diario do produto" format="brl" type="bar" days={Math.max(days, 14)} />
+      {/* ZONA 4 — 4 charts 2x2 (tendencia financeira) */}
+      <div>
+        <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+          Tendencia financeira
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ChartCard productId={id} metric="cpa" title="CPA" subtitle="ideal: estavel ou caindo" format="brl" days={Math.max(days, 14)} />
+          <ChartCard productId={id} metric="roas" title="ROAS" subtitle="meta: >= 1.6x sustentado" format="x" days={Math.max(days, 14)} />
+          <ChartCard productId={id} metric="sales" title="Vendas/dia" subtitle="atribuicao Kirvano webhook" format="num" type="bar" days={Math.max(days, 14)} />
+          <ChartCard productId={id} metric="spend" title="Gasto/dia" subtitle="vs target diario do produto" format="brl" type="bar" days={Math.max(days, 14)} />
+        </div>
       </div>
 
-      {/* Decision Queue resumido + Recent actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <DecisionQueuePreview data={decisions.data} loading={decisions.isLoading} />
-        <RecentActionsCard actions={recentActions.data?.actions ?? []} loading={recentActions.isLoading} />
-      </div>
+      {/* ZONA 5 — Awareness mismatch (sinal Schwartz) */}
+      <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} />
     </div>
   );
 }
@@ -185,22 +180,23 @@ export default function ProductOverviewPage({
 function HeroKpisGrid({
   data,
   loading,
-  group,
+  keys,
 }: {
   data: HeroKpisResponse | undefined;
   loading: boolean;
-  group: "primary" | "secondary";
+  keys?: string[];
 }) {
   if (loading || !data) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
+        {Array.from({ length: keys?.length ?? 6 }).map((_, i) => (
           <div key={i} className="h-24 bg-card border border-border rounded-lg animate-pulse" />
         ))}
       </div>
     );
   }
-  const items = group === "primary" ? data.primary : data.secondary;
+  const all = [...data.primary, ...data.secondary];
+  const items = keys ? keys.map(k => all.find(i => i.key === k)).filter(Boolean) as HeroKpiItem[] : data.primary;
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
       {items.map(kpi => (
@@ -210,13 +206,41 @@ function HeroKpisGrid({
           value={formatHeroValue(kpi)}
           delta={kpi.delta}
           deltaDirection={kpi.direction}
-          hint={group === "secondary" ? kpi.hint : undefined}
-          size={group === "secondary" ? "sm" : "md"}
           tooltipTerm={kpi.key}
         />
       ))}
     </div>
   );
+}
+
+function AgentStatusPill({
+  heartbeat,
+  supervisedMode,
+}: {
+  heartbeat:
+    | { lastCollectionAt: string | null; consecutiveFailures: number }
+    | undefined;
+  supervisedMode: boolean;
+}) {
+  const tone: Tone = supervisedMode
+    ? "warning"
+    : heartbeat
+      ? heartbeat.consecutiveFailures >= 3
+        ? "danger"
+        : heartbeat.consecutiveFailures > 0
+          ? "warning"
+          : "success"
+      : "muted";
+  const label = supervisedMode
+    ? "Supervisionado"
+    : tone === "success"
+      ? "Agente OK"
+      : tone === "warning"
+        ? "Agente com avisos"
+        : tone === "danger"
+          ? "Agente parado"
+          : "Sem dado";
+  return <StatusBadge tone={tone} label={label} dot />;
 }
 
 function formatHeroValue(kpi: HeroKpiItem): string {
@@ -428,7 +452,68 @@ function CeoReportButton({ productId, days }: { productId: string; days: number 
 
 // ─── Pacing Mensal ──────────────────────────────────────────────────
 
-function PacingCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
+function PacingCard({ data, loading, compact }: { data: MonthlyPaceResponse | undefined; loading: boolean; compact?: boolean }) {
+  if (compact) return <PacingCompactCard data={data} loading={loading} />;
+  return <PacingFullCard data={data} loading={loading} />;
+}
+
+function PacingCompactCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
+  return (
+    <section className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
+          Pacing mensal
+        </h3>
+        {data && data.status !== "no_goal" && (
+          <span className="text-[10px] text-muted-foreground tabular-nums">
+            D{data.dayOfMonth}/{data.daysInMonth}
+          </span>
+        )}
+      </div>
+      {loading || !data ? (
+        <SkeletonLines lines={2} />
+      ) : data.status === "no_goal" ? (
+        <div className="text-xs text-muted-foreground italic">
+          Sem meta cadastrada — agente nao ajusta pacing.
+        </div>
+      ) : (
+        <>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <div className="text-2xl font-heading font-semibold tabular-nums">
+              {data.currentSales}
+              <span className="text-sm text-muted-foreground font-normal">
+                {" "}
+                / {data.targetSales}
+              </span>
+            </div>
+            <StatusBadge tone={PACE_TONE[data.status]} label={PACE_LABEL[data.status]} dot size="sm" />
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+            <div
+              className={`h-full ${
+                data.status === "ahead" || data.status === "on_track"
+                  ? "bg-success"
+                  : data.status === "behind"
+                    ? "bg-warning"
+                    : "bg-destructive"
+              }`}
+              style={{
+                width: `${Math.min(100, ((data.currentSales / (data.targetSales || 1)) * 100))}%`,
+              }}
+            />
+          </div>
+          {data.requiredDailySales !== null && (
+            <div className="text-[10px] text-muted-foreground mt-1.5 tabular-nums">
+              precisa {data.requiredDailySales}/d nos proximos {data.daysLeft}d
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function PacingFullCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
   return (
     <section className="bg-card border border-border rounded-lg p-5 h-full">
       <div className="flex items-baseline justify-between gap-3 mb-3">
@@ -698,96 +783,6 @@ function InlineMarkdown({ text }: { text: string }) {
   );
 }
 
-// ─── Status Agente ──────────────────────────────────────────────────
-
-function AgentStatusCard({
-  productId,
-  heartbeat,
-  loading,
-  supervisedMode,
-}: {
-  productId: string;
-  heartbeat:
-    | {
-        lastCollectionAt: string | null;
-        lastAutomationAt: string | null;
-        consecutiveFailures: number;
-        lastError: string | null;
-      }
-    | undefined;
-  loading: boolean;
-  supervisedMode: boolean;
-}) {
-  const queryClient = useQueryClient();
-  const runMutation = useMutation({
-    mutationFn: () => api.runAgentProduct(productId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent", "heartbeats"] });
-      queryClient.invalidateQueries({ queryKey: ["actions", productId] });
-    },
-  });
-
-  const tone: Tone = heartbeat
-    ? heartbeat.consecutiveFailures >= 3
-      ? "danger"
-      : heartbeat.consecutiveFailures > 0
-        ? "warning"
-        : "success"
-    : "muted";
-
-  const sinceCollection = heartbeat?.lastCollectionAt
-    ? formatRelativeTime(heartbeat.lastCollectionAt)
-    : "nunca";
-
-  return (
-    <section className="bg-card border border-border rounded-lg p-5 h-full">
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <h2 className="text-base font-medium">Agente</h2>
-        <StatusDot tone={tone} />
-      </div>
-      {supervisedMode && (
-        <div className="mb-3">
-          <StatusBadge tone="warning" label="Modo supervisionado" dot size="sm" />
-        </div>
-      )}
-      {loading ? (
-        <SkeletonLines lines={3} />
-      ) : (
-        <dl className="space-y-2 text-sm">
-          <Row label="Ultima coleta" value={sinceCollection} />
-          <Row
-            label="Ultima acao"
-            value={heartbeat?.lastAutomationAt ? formatRelativeTime(heartbeat.lastAutomationAt) : "nenhuma"}
-          />
-          <Row
-            label="Status"
-            value={
-              tone === "success"
-                ? "Saudavel"
-                : tone === "warning"
-                  ? `${heartbeat?.consecutiveFailures} falha(s)`
-                  : tone === "danger"
-                    ? "PARADO"
-                    : "—"
-            }
-          />
-          {heartbeat?.lastError && (
-            <div className="text-xs text-destructive break-words mt-2">
-              {heartbeat.lastError.slice(0, 200)}
-            </div>
-          )}
-        </dl>
-      )}
-      <button
-        onClick={() => runMutation.mutate()}
-        disabled={runMutation.isPending}
-        className="mt-4 w-full text-xs py-2 bg-primary text-primary-foreground rounded font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-      >
-        {runMutation.isPending ? "executando ciclo..." : "rodar ciclo agora"}
-      </button>
-    </section>
-  );
-}
 
 // ─── Charts (Recharts) ──────────────────────────────────────────────
 
@@ -948,54 +943,8 @@ function DecisionQueuePreview({
   );
 }
 
-// ─── Recent actions ─────────────────────────────────────────────────
-
-function RecentActionsCard({
-  actions,
-  loading,
-}: {
-  actions: ActionLogItem[];
-  loading: boolean;
-}) {
-  return (
-    <section className="bg-card border border-border rounded-lg p-5">
-      <h2 className="text-base font-medium">Ultimas decisoes do agente</h2>
-      <p className="text-xs text-muted-foreground mt-0.5 mb-3">8 mais recentes.</p>
-      {loading ? (
-        <SkeletonLines lines={4} />
-      ) : actions.length === 0 ? (
-        <div className="text-sm text-muted-foreground">Nenhuma acao ainda.</div>
-      ) : (
-        <div className="space-y-2">
-          {actions.map(a => (
-            <div key={a.id} className="text-xs border-b border-border pb-2 last:border-b-0">
-              <div className="flex justify-between gap-2">
-                <span className="font-mono text-primary">{a.action}</span>
-                <span className="text-muted-foreground tabular-nums shrink-0">
-                  {formatRelativeTime(a.executedAt)}
-                </span>
-              </div>
-              {a.entityName && (
-                <div className="text-muted-foreground mt-0.5 truncate">{a.entityName}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
 
 // ─── primitives ─────────────────────────────────────────────────────
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3 text-sm">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="tabular-nums">{value}</dd>
-    </div>
-  );
-}
 
 function SkeletonLines({ lines }: { lines: number }) {
   return (

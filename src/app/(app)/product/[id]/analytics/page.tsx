@@ -21,10 +21,14 @@ import {
   type LtvCohortResponse,
   type PaybackByEntity,
   type PaybackCohortResponse,
+  type HeroKpiItem,
+  type HeroKpisResponse,
   type ProfitWaterfallResponse,
 } from "@/lib/api";
 import { formatBRL, formatPercent, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
+import { KpiCard } from "@/components/ui/kpi-card";
+import { PeriodPicker } from "@/components/ui/period-picker";
 
 export default function AnalyticsPage({
   params,
@@ -32,6 +36,13 @@ export default function AnalyticsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const [days, setDays] = useState<number>(7);
+
+  const heroKpisQ = useQuery({
+    queryKey: ["analytics", "hero-kpis", id, days],
+    queryFn: () => api.heroKpis(id, days),
+    refetchInterval: 5 * 60_000,
+  });
 
   const hitRateQ = useQuery({
     queryKey: ["analytics", "hit-rate", id],
@@ -84,7 +95,10 @@ export default function AnalyticsPage({
       <PageHeader
         title="Analytics"
         subtitle="Analise → acao → acao → acao. Lucro absoluto manda — ROAS e vaidade."
+        actions={<PeriodPicker value={days} onChange={setDays} />}
       />
+
+      <SecondaryKpisSection data={heroKpisQ.data} loading={heroKpisQ.isLoading} />
 
       <DecisionQueueSection data={decisionsQ.data} loading={decisionsQ.isLoading} />
       <VolumeScoreSection data={volumeQ.data} loading={volumeQ.isLoading} />
@@ -1139,4 +1153,59 @@ function Skeleton() {
       <div className="h-4 bg-muted/40 rounded animate-pulse w-1/2" />
     </div>
   );
+}
+
+function SecondaryKpisSection({
+  data,
+  loading,
+}: {
+  data: HeroKpisResponse | undefined;
+  loading: boolean;
+}) {
+  return (
+    <section>
+      <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
+        Sinais de criativo & leilao
+      </h2>
+      {loading || !data ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-24 bg-card border border-border rounded-lg animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {data.secondary.map(kpi => (
+            <KpiCard
+              key={kpi.key}
+              label={kpi.label}
+              value={formatHeroValue(kpi)}
+              delta={kpi.delta}
+              deltaDirection={kpi.direction}
+              hint={kpi.hint}
+              size="sm"
+              tooltipTerm={kpi.key}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function formatHeroValue(kpi: HeroKpiItem): string {
+  if (kpi.value == null || !Number.isFinite(kpi.value)) return "—";
+  switch (kpi.unit) {
+    case "BRL":
+      return formatBRL(kpi.value);
+    case "INT":
+      return formatNumber(Math.round(kpi.value));
+    case "PCT":
+      return `${kpi.value.toFixed(2)}%`;
+    case "RATIO":
+      return kpi.value > 0 ? `${kpi.value.toFixed(2)}x` : "—";
+    case "FLOAT":
+    default:
+      return kpi.value.toFixed(2);
+  }
 }

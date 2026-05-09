@@ -34,6 +34,7 @@ const SEARCH_THRESHOLD = 5;
 export function Sidebar() {
   const pathname = usePathname();
   const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
 
   const { data } = useQuery({
     queryKey: ["products"],
@@ -63,16 +64,28 @@ export function Sidebar() {
     [overview],
   );
 
+  const visibleProducts = useMemo(
+    () =>
+      showArchived
+        ? products
+        : products.filter(p => p.status !== "archived"),
+    [products, showArchived],
+  );
+  const archivedCount = useMemo(
+    () => products.filter(p => p.status === "archived").length,
+    [products],
+  );
+
   const filtered = useMemo(() => {
-    if (!search.trim()) return products;
+    if (!search.trim()) return visibleProducts;
     const q = search.toLowerCase();
-    return products.filter(
+    return visibleProducts.filter(
       p =>
         p.name.toLowerCase().includes(q) ||
         p.slug.toLowerCase().includes(q) ||
         p.stage.toLowerCase().includes(q),
     );
-  }, [products, search]);
+  }, [visibleProducts, search]);
 
   const showSearch = products.length > SEARCH_THRESHOLD;
 
@@ -176,6 +189,15 @@ export function Sidebar() {
             />
           );
         })}
+
+        {archivedCount > 0 && (
+          <button
+            onClick={() => setShowArchived(s => !s)}
+            className="w-full text-left px-3 py-1 text-[10px] uppercase tracking-wider text-sidebar-foreground/40 hover:text-sidebar-foreground/70 transition-colors"
+          >
+            {showArchived ? "ocultar" : "mostrar"} arquivados ({archivedCount})
+          </button>
+        )}
 
         <div className="pt-2">
           <NavItem

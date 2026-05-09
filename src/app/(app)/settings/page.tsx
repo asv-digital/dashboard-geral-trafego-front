@@ -168,11 +168,20 @@ export default function SettingsPage() {
 
   const handleGlobalSave = (event: React.FormEvent) => {
     event.preventDefault();
+    // Valida date antes de toISOString() — string malformada quebra o submit.
+    let tokenCreatedAtIso: string | null = null;
+    if (metaForm.metaTokenCreatedAt) {
+      const d = new Date(metaForm.metaTokenCreatedAt);
+      if (Number.isNaN(d.getTime())) {
+        // Data inválida — descarta em vez de explodir o submit inteiro.
+        console.warn("[settings] data de criação do token inválida, ignorando");
+      } else {
+        tokenCreatedAtIso = d.toISOString();
+      }
+    }
     updateGlobalSettings.mutate({
       metaAccessToken: metaForm.metaAccessToken?.trim() || null,
-      metaTokenCreatedAt: metaForm.metaTokenCreatedAt
-        ? new Date(metaForm.metaTokenCreatedAt).toISOString()
-        : null,
+      metaTokenCreatedAt: tokenCreatedAtIso,
       metaAdAccountId: metaForm.metaAdAccountId?.trim() || null,
       metaAppId: metaForm.metaAppId?.trim() || null,
       metaAppSecret: metaForm.metaAppSecret?.trim() || null,
@@ -288,7 +297,7 @@ export default function SettingsPage() {
               pending={updateGlobalSettings.isPending}
               saved={globalSaved}
               error={globalSaveError}
-              label="Salvar conta + token"
+              label="Salvar (todos os campos Meta)"
             />
           </form>
         </div>
@@ -336,7 +345,7 @@ export default function SettingsPage() {
             pending={updateGlobalSettings.isPending}
             saved={globalSaved}
             error={globalSaveError}
-            label="Salvar Pixel + Page + Audiences"
+            label="Salvar (todos os campos Meta)"
           />
         </form>
       </Accordion>
@@ -380,7 +389,7 @@ export default function SettingsPage() {
             pending={updateGlobalSettings.isPending}
             saved={globalSaved}
             error={globalSaveError}
-            label="Salvar integracoes"
+            label="Salvar (todos os campos Meta)"
           />
         </form>
       </Accordion>
@@ -393,11 +402,14 @@ export default function SettingsPage() {
         statusLabel={whatsappStatus.label}
       >
         <form onSubmit={handleSave} className="space-y-3">
-          <TextField
+          <SelectField
             label="Provider"
-            value={form.whatsappProvider || ""}
+            value={form.whatsappProvider || "zappfy"}
             onChange={value => setField("whatsappProvider", value)}
-            placeholder="zappfy"
+            options={[
+              { value: "zappfy", label: "Zappfy (recomendado)" },
+              { value: "z-api", label: "Z-API" },
+            ]}
           />
           <TextField
             label="Instance ID"
@@ -541,24 +553,26 @@ export default function SettingsPage() {
             {Object.entries(health.components).map(([key, component]) => (
               <div
                 key={key}
-                className="text-xs flex justify-between py-1 border-b border-border/40"
+                className="text-xs py-1 border-b border-border/40 space-y-0.5"
               >
-                <span className="text-muted-foreground">{key}</span>
-                <span
-                  className={
-                    component.status === "ok"
-                      ? "text-success"
-                      : component.status === "warning"
-                        ? "text-warning"
-                        : component.status === "error"
-                          ? "text-destructive"
-                          : "text-muted-foreground"
-                  }
-                >
-                  {component.status}
-                </span>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">{key}</span>
+                  <span
+                    className={
+                      component.status === "ok"
+                        ? "text-success"
+                        : component.status === "warning"
+                          ? "text-warning"
+                          : component.status === "error"
+                            ? "text-destructive"
+                            : "text-muted-foreground"
+                    }
+                  >
+                    {component.status}
+                  </span>
+                </div>
                 {(component.message || component.error || component.status_key) && (
-                  <div className="col-span-2 text-[11px] text-muted-foreground pt-1">
+                  <div className="text-[11px] text-muted-foreground/80 break-words">
                     {component.status_key ? `${component.status_key}: ` : ""}
                     {component.message || component.error}
                   </div>
@@ -637,6 +651,35 @@ function Toggle({
         onChange={event => onChange(event.target.checked)}
         className="w-4 h-4 accent-primary"
       />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      >
+        {options.map(o => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

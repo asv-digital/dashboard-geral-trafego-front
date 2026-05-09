@@ -81,24 +81,34 @@ export default function RealtimePage({
       />
 
       <div className="flex gap-2 flex-wrap">
-        {CATEGORY_FILTERS.map(f => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-              filter === f.key
-                ? "border-primary text-primary bg-primary/10"
-                : "border-border text-muted-foreground hover:border-foreground/30"
-            }`}
-          >
-            {f.label}
-            {f.key !== "all" && (
-              <span className="ml-1 opacity-60">
-                {items.filter(a => getCategory(a.action) === f.key).length}
-              </span>
-            )}
-          </button>
-        ))}
+        {CATEGORY_FILTERS.map(f => {
+          const count =
+            f.key === "all"
+              ? items.length
+              : items.filter(a => getCategory(a.action) === f.key).length;
+          const empty = f.key !== "all" && count === 0;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              disabled={empty}
+              className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                filter === f.key
+                  ? "border-primary text-primary bg-primary/10"
+                  : empty
+                    ? "border-border/40 text-muted-foreground/40 cursor-not-allowed"
+                    : "border-border text-muted-foreground hover:border-foreground/30"
+              }`}
+            >
+              {f.label}
+              {f.key !== "all" && (
+                <span className={`ml-1 ${empty ? "opacity-30" : "opacity-60"}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {actions.isLoading ? (

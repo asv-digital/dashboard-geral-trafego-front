@@ -38,6 +38,7 @@ interface NewProductFormState {
   defaultHeadline: string;
   defaultDescription: string;
   defaultCTA: string;
+  niches: string;
 }
 
 export default function NewProductPage() {
@@ -57,6 +58,7 @@ export default function NewProductPage() {
     defaultHeadline: "",
     defaultDescription: "",
     defaultCTA: "LEARN_MORE",
+    niches: "",
   });
   const [autoActivate, setAutoActivate] = useState(false);
   const [supervisedMode, setSupervisedMode] = useState(false);
@@ -89,6 +91,7 @@ export default function NewProductPage() {
         defaultHeadline: form.defaultHeadline,
         defaultDescription: form.defaultDescription || undefined,
         defaultCTA: form.defaultCTA,
+        niches: form.niches.trim() || undefined,
         autoActivate,
         supervisedMode,
       };
@@ -216,6 +219,12 @@ export default function NewProductPage() {
             value={form.defaultCTA}
             onChange={value => setField("defaultCTA", value)}
             options={META_CTA_OPTIONS}
+          />
+          <Field
+            label="Sub-nichos (opcional, separados por vírgula)"
+            value={form.niches}
+            onChange={value => setField("niches", value)}
+            placeholder="ex: advogados, contadores, dentistas"
           />
         </Section>
 

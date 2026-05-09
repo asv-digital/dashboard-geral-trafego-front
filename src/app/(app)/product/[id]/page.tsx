@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
+import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bar,
@@ -239,13 +240,21 @@ export default function ProductOverviewPage({
       </div>
 
       {/* ZONA 4 — Awareness mismatch (sinal Schwartz) */}
-      <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} />
+      <MismatchesCard data={mismatches.data} loading={mismatches.isLoading} productId={id} />
 
-      {/* ZONA 5 — 4 charts 2x2 (tendencia financeira detalhada) */}
+      {/* ZONA 5 — 4 charts 2x2 (tendencia financeira detalhada). Período fixo
+          mínimo 14d porque tendência precisa de série mais longa que KPIs. */}
       <div>
-        <h2 className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-          Tendencia financeira (14 dias)
-        </h2>
+        <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+          <h2 className="text-xs uppercase tracking-wider text-muted-foreground">
+            Tendencia financeira ({Math.max(days, 14)} dias)
+          </h2>
+          {days < 14 && (
+            <span className="text-[10px] text-muted-foreground italic">
+              charts fixos em 14d (período selecionado é menor)
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <ChartCard productId={id} metric="cpa" title="CPA" subtitle="ideal: estavel ou caindo" format="brl" days={Math.max(days, 14)} />
           <ChartCard productId={id} metric="roas" title="ROAS" subtitle="meta: >= 1.6x sustentado" format="x" days={Math.max(days, 14)} />
@@ -715,9 +724,11 @@ function CeoReportButton({ productId, days }: { productId: string; days: number 
 function MismatchesCard({
   data,
   loading,
+  productId,
 }: {
   data: AwarenessMismatchesResponse | undefined;
   loading: boolean;
+  productId: string;
 }) {
   return (
     <section className="bg-card border border-border rounded-lg p-5 h-full">
@@ -751,9 +762,12 @@ function MismatchesCard({
                 <MismatchRow key={m.creativeId} item={m} />
               ))}
               {data.items.length > 5 && (
-                <div className="px-3 py-2 text-xs text-muted-foreground text-center border-t border-border">
-                  + {data.items.length - 5} outros mismatches
-                </div>
+                <Link
+                  href={`/product/${productId}/analytics#awareness`}
+                  className="block px-3 py-2 text-xs text-primary text-center border-t border-border hover:bg-muted/40 transition-colors"
+                >
+                  ver todos os {data.items.length} mismatches →
+                </Link>
               )}
             </div>
           )}

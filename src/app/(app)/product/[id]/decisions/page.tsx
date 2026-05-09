@@ -143,28 +143,53 @@ function DecisionRow({ action }: { action: ActionLogItem }) {
             </div>
           )}
           {hasInputSnapshot && (
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Input que levou à decisão
-              </div>
-              <pre className="text-[10px] mt-1 text-muted-foreground bg-background border border-border rounded p-2 overflow-x-auto">
-                {JSON.stringify(action.inputSnapshot, null, 2)}
-              </pre>
-            </div>
+            <JsonBlock
+              label="Input que levou à decisão"
+              value={action.inputSnapshot}
+            />
           )}
           {hasOutcome && (
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                Outcome retroativo
-              </div>
-              <pre className="text-[10px] mt-1 text-muted-foreground bg-background border border-border rounded p-2 overflow-x-auto">
-                {JSON.stringify(action.outcome, null, 2)}
-              </pre>
-            </div>
+            <JsonBlock
+              label="Outcome retroativo (medido 24h depois)"
+              value={action.outcome}
+            />
           )}
         </div>
       )}
     </details>
+  );
+}
+
+function JsonBlock({ label, value }: { label: string; value: unknown }) {
+  const [copied, setCopied] = useState(false);
+  const json = JSON.stringify(value, null, 2);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard sem permissão — ignora */
+    }
+  }
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        <button
+          onClick={copy}
+          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          title="copiar JSON"
+        >
+          {copied ? "✓ copiado" : "copiar"}
+        </button>
+      </div>
+      <pre className="text-[10px] mt-1 text-muted-foreground bg-background border border-border rounded p-2 overflow-x-auto font-mono leading-relaxed">
+        {json}
+      </pre>
+    </div>
   );
 }
 

@@ -11,6 +11,7 @@ import {
   LogOut,
   Search,
   AlertCircle,
+  Activity,
 } from "lucide-react";
 import {
   api,
@@ -99,6 +100,13 @@ export function Sidebar() {
               </span>
             ) : undefined
           }
+        />
+
+        <NavItem
+          href="/orquestrador"
+          icon={<Activity className="w-4 h-4" />}
+          label="Orquestrador"
+          active={pathname === "/orquestrador"}
         />
 
         <div className="pt-4 pb-1 px-3 flex items-center justify-between">

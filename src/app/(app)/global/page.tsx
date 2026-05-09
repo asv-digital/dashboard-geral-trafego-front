@@ -5,12 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   api,
-  type ActivityItem,
   type GlobalPnlProduct,
-  type HeartbeatItem,
   type ProductHealth,
 } from "@/lib/api";
-import { calcDelta, formatBRL, formatNumber, formatRelativeTime } from "@/lib/format";
+import { calcDelta, formatBRL, formatNumber } from "@/lib/format";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { PeriodPicker } from "@/components/ui/period-picker";
@@ -25,30 +23,12 @@ const HEALTH_TONE: Record<ProductHealth, { tone: Tone; label: string }> = {
 };
 
 export default function GlobalPage() {
-  const [now, setNow] = useState(0);
   const [days, setDays] = useState<number>(7);
-
-  useEffect(() => {
-    const syncNow = () => setNow(Date.now());
-    syncNow();
-    const intervalId = window.setInterval(syncNow, 60_000);
-    return () => window.clearInterval(intervalId);
-  }, []);
 
   const { data: pnl } = useQuery({
     queryKey: ["global", "pnl", days],
     queryFn: () => api.globalPnl(days),
     refetchInterval: 60_000,
-  });
-  const { data: activity } = useQuery({
-    queryKey: ["global", "activity"],
-    queryFn: () => api.globalActivity(),
-    refetchInterval: 30_000,
-  });
-  const { data: heartbeats } = useQuery({
-    queryKey: ["global", "heartbeats"],
-    queryFn: () => api.globalHeartbeats(),
-    refetchInterval: 30_000,
   });
   const { data: overview } = useQuery({
     queryKey: ["global", "overview", days],
@@ -68,8 +48,6 @@ export default function GlobalPage() {
     profit: 0,
   };
   const products = pnl?.products ?? [];
-  const heartbeatItems = heartbeats?.heartbeats ?? [];
-  const recentActivity = activity?.activity.slice(0, 20) ?? [];
 
   return (
     <div className="p-6 md:p-8 space-y-8">
@@ -146,34 +124,12 @@ export default function GlobalPage() {
         )}
       </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section>
-          <SectionHeader title="Heartbeats do agente" />
-          <div className="bg-card border border-border rounded-lg divide-y divide-border">
-            {heartbeatItems.length === 0 ? (
-              <div className="p-5 text-xs text-muted-foreground">nenhum heartbeat</div>
-            ) : (
-              heartbeatItems.map(heartbeat => (
-                <HeartbeatRow
-                  key={heartbeat.productId}
-                  heartbeat={heartbeat}
-                  now={now}
-                />
-              ))
-            )}
-          </div>
-        </section>
-
-        <section>
-          <SectionHeader title="Atividade recente (cross-product)" />
-          <div className="bg-card border border-border rounded-lg divide-y divide-border max-h-96 overflow-y-auto">
-            {recentActivity.length === 0 ? (
-              <div className="p-5 text-xs text-muted-foreground">sem atividade</div>
-            ) : (
-              recentActivity.map(item => <ActivityRow key={item.id} item={item} now={now} />)
-            )}
-          </div>
-        </section>
+      <div className="text-[11px] text-muted-foreground italic">
+        Saude do agente, ciclos automaticos e ultimas acoes em tempo real ficam em{" "}
+        <Link href="/orquestrador" className="text-primary hover:underline">
+          Orquestrador
+        </Link>
+        .
       </div>
     </div>
   );
@@ -329,66 +285,6 @@ function DeltaCell({
     <div className="flex flex-col items-end leading-tight">
       <span>{value}</span>
       <span className={`text-[9px] tabular-nums ${toneCls}`}>{sign}{delta.toFixed(1)}%</span>
-    </div>
-  );
-}
-
-function HeartbeatRow({
-  heartbeat,
-  now,
-}: {
-  heartbeat: HeartbeatItem;
-  now: number;
-}) {
-  const lastCollection = heartbeat.lastCollectionAt
-    ? new Date(heartbeat.lastCollectionAt)
-    : null;
-  const hoursSince =
-    lastCollection && now > 0
-      ? (now - lastCollection.getTime()) / (1000 * 60 * 60)
-      : null;
-
-  const tone: Tone =
-    hoursSince === null
-      ? "muted"
-      : hoursSince > 8
-        ? "danger"
-        : hoursSince > 5
-          ? "warning"
-          : "success";
-
-  return (
-    <div className="p-4 flex items-center justify-between text-xs">
-      <div>
-        <div className="font-medium text-sm">{heartbeat.product?.name ?? "Produto"}</div>
-        <div className="text-muted-foreground mt-0.5">
-          {lastCollection
-            ? hoursSince === null
-              ? "calculando…"
-              : formatRelativeTime(lastCollection, now)
-            : "nunca coletou"}
-          {heartbeat.consecutiveFailures > 0 &&
-            ` · ${heartbeat.consecutiveFailures} falhas`}
-        </div>
-      </div>
-      <StatusDot tone={tone} />
-    </div>
-  );
-}
-
-function ActivityRow({ item, now }: { item: ActivityItem; now: number }) {
-  return (
-    <div className="p-3 text-xs">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-primary">{item.action}</span>
-        <span className="text-muted-foreground">
-          {formatRelativeTime(item.executedAt, now)}
-        </span>
-      </div>
-      <div className="text-muted-foreground mt-1">
-        {item.product?.slug ?? "sem-produto"} · {item.entityName || item.entityType}
-        {item.details ? ` — ${item.details}` : ""}
-      </div>
     </div>
   );
 }

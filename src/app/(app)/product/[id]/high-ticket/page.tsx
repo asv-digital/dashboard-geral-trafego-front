@@ -206,13 +206,18 @@ function NewSaleForm({
   const [error, setError] = useState<string | null>(null);
 
   const create = useMutation({
-    mutationFn: () =>
-      api.createHighTicketSale(productId, {
+    mutationFn: () => {
+      const parsed = parseBRLAmount(amount);
+      if (parsed === null) {
+        throw new Error("valor_invalido");
+      }
+      return api.createHighTicketSale(productId, {
         customerEmail: email.trim(),
-        amountGross: parseFloat(amount.replace(",", ".")),
+        amountGross: parsed,
         saleDate: new Date(date).toISOString(),
         notes: notes.trim() || undefined,
-      }),
+      });
+    },
     onSuccess: () => {
       setEmail("");
       setAmount("17000");
@@ -221,7 +226,12 @@ function NewSaleForm({
       setError(null);
       onCreated();
     },
-    onError: () => setError("erro ao salvar (verifique email e valor)"),
+    onError: (err: Error) =>
+      setError(
+        err.message === "valor_invalido"
+          ? "valor inválido — use ex: 17000 ou 17.000,00"
+          : "erro ao salvar (verifique email e valor)",
+      ),
   });
 
   return (
@@ -229,6 +239,10 @@ function NewSaleForm({
       onSubmit={e => {
         e.preventDefault();
         if (!email || !amount) return;
+        if (parseBRLAmount(amount) === null) {
+          setError("valor inválido — use ex: 17000 ou 17.000,00");
+          return;
+        }
         create.mutate();
       }}
       className="bg-card border border-border rounded-lg p-5 space-y-3"
@@ -247,14 +261,21 @@ function NewSaleForm({
         </Field>
         <Field label="Valor (R$)" required>
           <input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={amount}
             onChange={e => setAmount(e.target.value)}
             required
             className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm tabular-nums"
-            placeholder="17000"
+            placeholder="17.000,00 ou 17000"
           />
+          {amount && (
+            <span className="text-[10px] text-muted-foreground mt-0.5 block">
+              {parseBRLAmount(amount) !== null
+                ? `interpretado como ${formatBRL(parseBRLAmount(amount)!)}`
+                : "não consigo interpretar este valor"}
+            </span>
+          )}
         </Field>
         <Field label="Data da venda" required>
           <input
@@ -288,6 +309,37 @@ function NewSaleForm({
       </div>
     </form>
   );
+}
+
+/**
+ * Parser de valor monetário tolerante:
+ * - "17000"       → 17000
+ * - "17000.50"    → 17000.5  (notação americana)
+ * - "17000,50"    → 17000.5  (notação BR sem separador de milhar)
+ * - "17.000"      → 17000    (BR com separador de milhar)
+ * - "17.000,00"   → 17000    (BR completo)
+ * - "17,000.00"   → 17000    (US completo)
+ * - "R$ 17.000,00" → 17000
+ * Retorna null se não conseguir interpretar.
+ */
+function parseBRLAmount(raw: string): number | null {
+  const cleaned = raw.replace(/[^\d.,-]/g, "").trim();
+  if (!cleaned) return null;
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma === -1 && lastDot === -1) {
+    normalized = cleaned;
+  } else if (lastComma > lastDot) {
+    // BR: ponto = milhar, vírgula = decimal
+    normalized = cleaned.replace(/\./g, "").replace(",", ".");
+  } else {
+    // US: vírgula = milhar, ponto = decimal
+    normalized = cleaned.replace(/,/g, "");
+  }
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
 }
 
 function Field({

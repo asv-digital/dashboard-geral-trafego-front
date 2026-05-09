@@ -125,6 +125,21 @@ export default function ProductOverviewPage({
     refetchInterval: 10 * 60_000,
   });
 
+  // Erro de carregamento — qualquer query crítica que falhar vira banner.
+  // Sparklines não entram pra não poluir.
+  const queryErrors: { name: string; error: Error }[] = [
+    product.isError && { name: "produto", error: product.error as Error },
+    pulse.isError && { name: "pulse", error: pulse.error as Error },
+    heroKpis.isError && { name: "KPIs", error: heroKpis.error as Error },
+    decisions.isError && { name: "decisões", error: decisions.error as Error },
+    briefing.isError && { name: "briefing", error: briefing.error as Error },
+    pace.isError && { name: "pacing", error: pace.error as Error },
+    mismatches.isError && {
+      name: "awareness",
+      error: mismatches.error as Error,
+    },
+  ].filter(Boolean) as { name: string; error: Error }[];
+
   const sparklines: Record<string, number[]> = {
     cpa: tsCpa.data?.points.map(p => p.value ?? 0) ?? [],
     roas: tsRoas.data?.points.map(p => p.value ?? 0) ?? [],
@@ -133,15 +148,45 @@ export default function ProductOverviewPage({
     profit: tsCm.data?.points.map(p => p.value ?? 0) ?? [],
   };
 
+  const [briefingError, setBriefingError] = useState<string | null>(null);
   const briefingRefresh = useMutation({
     mutationFn: () => api.briefing(id, true),
     onSuccess: data => {
       queryClient.setQueryData(["analytics", "briefing", id], data);
+      setBriefingError(null);
+    },
+    onError: (err: Error) => {
+      setBriefingError(err.message || "falha ao regenerar briefing");
+      setTimeout(() => setBriefingError(null), 5000);
     },
   });
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
+      {queryErrors.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <strong>Falha ao carregar:</strong> {queryErrors.map(q => q.name).join(", ")}.{" "}
+          <button
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ["product", id] });
+              queryClient.invalidateQueries({ queryKey: ["analytics"] });
+            }}
+            className="underline hover:no-underline"
+          >
+            tentar novamente
+          </button>
+          <details className="mt-1 opacity-70">
+            <summary className="cursor-pointer text-[10px]">detalhes</summary>
+            <ul className="mt-1 ml-3 text-[10px] list-disc">
+              {queryErrors.map(q => (
+                <li key={q.name}>
+                  <strong>{q.name}:</strong> {q.error.message}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      )}
       {/* ZONA 1 — Pulse + acoes + periodo */}
       <section className="space-y-3">
         <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -184,6 +229,7 @@ export default function ProductOverviewPage({
             loading={briefing.isLoading}
             refreshing={briefingRefresh.isPending}
             onRefresh={() => briefingRefresh.mutate()}
+            refreshError={briefingError}
           />
         </div>
         <div className="space-y-4">
@@ -457,16 +503,21 @@ function EmergencyStopButton({ productId }: { productId: string }) {
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<EmergencyStopResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const stop = useMutation({
     mutationFn: () => api.emergencyStop(productId),
     onSuccess: r => {
       setResult(r);
       setConfirming(false);
+      setError(null);
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
       queryClient.invalidateQueries({ queryKey: ["actions", productId] });
       queryClient.invalidateQueries({ queryKey: ["campaigns", productId] });
       queryClient.invalidateQueries({ queryKey: ["analytics", "pulse", productId] });
+    },
+    onError: (err: Error) => {
+      setError(err.message || "falha ao acionar freio");
     },
   });
 
@@ -500,6 +551,11 @@ function EmergencyStopButton({ productId }: { productId: string }) {
             <p className="text-xs text-muted-foreground mb-4 italic">
               Reverter: ativa campanhas no Meta + desliga supervisedMode em /config.
             </p>
+            {error && (
+              <div className="text-xs text-destructive bg-destructive/10 border border-destructive/30 rounded-md p-2 mb-3">
+                <strong>Falhou:</strong> {error}
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setConfirming(false)}
@@ -562,12 +618,18 @@ function CeoReportButton({ productId, days }: { productId: string; days: number 
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState<CeoReportResponse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const generate = useMutation({
     mutationFn: () => api.ceoReport(productId, days),
     onSuccess: data => {
       setReport(data);
       setOpen(true);
+      setError(null);
+    },
+    onError: (err: Error) => {
+      setError(err.message || "falha ao gerar relatório");
+      setTimeout(() => setError(null), 5000);
     },
   });
 
@@ -584,13 +646,20 @@ function CeoReportButton({ productId, days }: { productId: string; days: number 
 
   return (
     <>
-      <button
-        onClick={() => generate.mutate()}
-        disabled={generate.isPending}
-        className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-      >
-        {generate.isPending ? "gerando..." : "Relatorio CEO"}
-      </button>
+      <div className="flex flex-col items-end gap-1">
+        <button
+          onClick={() => generate.mutate()}
+          disabled={generate.isPending}
+          className="text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+        >
+          {generate.isPending ? "gerando..." : "Relatorio CEO"}
+        </button>
+        {error && (
+          <span className="text-[10px] text-destructive max-w-[200px] text-right">
+            {error}
+          </span>
+        )}
+      </div>
 
       {open && report && (
         <div
@@ -638,149 +707,6 @@ function CeoReportButton({ productId, days }: { productId: string; days: number 
         </div>
       )}
     </>
-  );
-}
-
-// ─── Pacing Mensal ──────────────────────────────────────────────────
-
-function PacingCard({ data, loading, compact }: { data: MonthlyPaceResponse | undefined; loading: boolean; compact?: boolean }) {
-  if (compact) return <PacingCompactCard data={data} loading={loading} />;
-  return <PacingFullCard data={data} loading={loading} />;
-}
-
-function PacingCompactCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
-  return (
-    <section className="bg-card border border-border rounded-lg p-4">
-      <div className="flex items-baseline justify-between gap-2 mb-2">
-        <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
-          Pacing mensal
-        </h3>
-        {data && data.status !== "no_goal" && (
-          <span className="text-[10px] text-muted-foreground tabular-nums">
-            D{data.dayOfMonth}/{data.daysInMonth}
-          </span>
-        )}
-      </div>
-      {loading || !data ? (
-        <SkeletonLines lines={2} />
-      ) : data.status === "no_goal" ? (
-        <div className="text-xs text-muted-foreground italic">
-          Sem meta cadastrada — agente nao ajusta pacing.
-        </div>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <div className="text-2xl font-heading font-semibold tabular-nums">
-              {data.currentSales}
-              <span className="text-sm text-muted-foreground font-normal">
-                {" "}
-                / {data.targetSales}
-              </span>
-            </div>
-            <StatusBadge tone={PACE_TONE[data.status]} label={PACE_LABEL[data.status]} dot size="sm" />
-          </div>
-          <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
-            <div
-              className={`h-full ${
-                data.status === "ahead" || data.status === "on_track"
-                  ? "bg-success"
-                  : data.status === "behind"
-                    ? "bg-warning"
-                    : "bg-destructive"
-              }`}
-              style={{
-                width: `${Math.min(100, ((data.currentSales / (data.targetSales || 1)) * 100))}%`,
-              }}
-            />
-          </div>
-          {data.requiredDailySales !== null && (
-            <div className="text-[10px] text-muted-foreground mt-1.5 tabular-nums">
-              precisa {data.requiredDailySales}/d nos proximos {data.daysLeft}d
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function PacingFullCard({ data, loading }: { data: MonthlyPaceResponse | undefined; loading: boolean }) {
-  return (
-    <section className="bg-card border border-border rounded-lg p-5 h-full">
-      <div className="flex items-baseline justify-between gap-3 mb-3">
-        <div>
-          <h2 className="text-base font-medium">Pacing mensal</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Sobral: meta mensal direciona quao agressivo escalar.
-          </p>
-        </div>
-        {data && (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            D{data.dayOfMonth}/{data.daysInMonth}
-          </span>
-        )}
-      </div>
-      {loading || !data ? (
-        <SkeletonLines lines={3} />
-      ) : data.status === "no_goal" ? (
-        <div className="text-sm text-muted-foreground">
-          Sem meta cadastrada para {data.month}. Cadastre em <strong>/config</strong> para o agente
-          ajustar threshold de scale dinamicamente.
-        </div>
-      ) : (
-        <>
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <div className="text-3xl font-heading font-semibold tabular-nums">
-              {data.currentSales}
-              <span className="text-base text-muted-foreground font-normal">
-                {" "}
-                / {data.targetSales}
-              </span>
-            </div>
-            <StatusBadge tone={PACE_TONE[data.status]} label={PACE_LABEL[data.status]} dot />
-          </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden mt-3">
-            <div
-              className={`h-full ${
-                data.status === "ahead" || data.status === "on_track"
-                  ? "bg-success"
-                  : data.status === "behind"
-                    ? "bg-warning"
-                    : "bg-destructive"
-              }`}
-              style={{
-                width: `${Math.min(100, ((data.currentSales / (data.targetSales || 1)) * 100))}%`,
-              }}
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-3 mt-4 text-xs">
-            <div>
-              <div className="text-[10px] uppercase text-muted-foreground">Pace projetado</div>
-              <div className="font-medium tabular-nums">{data.pace ?? "—"} vendas</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase text-muted-foreground">Precisa/dia</div>
-              <div className="font-medium tabular-nums">
-                {data.requiredDailySales !== null ? data.requiredDailySales : "—"}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase text-muted-foreground">Restam</div>
-              <div className="font-medium tabular-nums">{data.daysLeft}d</div>
-            </div>
-          </div>
-          {data.scaleThresholdAdjust !== 1.0 && (
-            <div className="text-[11px] text-muted-foreground mt-3 italic">
-              Agente ajustou threshold de scale em ×{data.scaleThresholdAdjust.toFixed(2)} —{" "}
-              {data.scaleThresholdAdjust > 1
-                ? "mais agressivo (atras da meta)"
-                : "mais conservador (adiante)"}
-              .
-            </div>
-          )}
-        </>
-      )}
-    </section>
   );
 }
 
@@ -876,11 +802,13 @@ function BriefingCard({
   loading,
   refreshing,
   onRefresh,
+  refreshError,
 }: {
   data: BriefingResponse | undefined;
   loading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  refreshError?: string | null;
 }) {
   return (
     <section className="bg-card border border-border rounded-lg p-5 h-full">
@@ -891,13 +819,20 @@ function BriefingCard({
             Gerado por IA cruzando lucro, hit rate, fadiga, decisoes.
           </p>
         </div>
-        <button
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="text-xs px-2.5 py-1 bg-muted hover:bg-muted/70 rounded transition-colors shrink-0"
-        >
-          {refreshing ? "regenerando..." : "regenerar"}
-        </button>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="text-xs px-2.5 py-1 bg-muted hover:bg-muted/70 rounded transition-colors"
+          >
+            {refreshing ? "regenerando..." : "regenerar"}
+          </button>
+          {refreshError && (
+            <span className="text-[10px] text-destructive max-w-[180px] text-right">
+              {refreshError}
+            </span>
+          )}
+        </div>
       </div>
       {loading || !data ? (
         <SkeletonLines lines={6} />

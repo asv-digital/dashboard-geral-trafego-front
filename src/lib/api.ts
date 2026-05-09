@@ -648,7 +648,7 @@ export const api = {
       `/sales/summary${qs({ productId, dateFrom, dateTo })}`
     ),
 
-  agentStatus: () => request<Record<string, unknown>>("/agent/status"),
+  agentStatus: () => request<AgentStatusResponse>("/agent/status"),
   agentAccount: () => request<AgentAccountStatus>("/agent/account"),
   agentHeartbeats: () => request<{ heartbeats: HeartbeatItem[] }>("/agent/heartbeats"),
   runAgentAll: () =>
@@ -723,6 +723,32 @@ export const api = {
     }),
   archiveAsset: (id: string) =>
     request<{ ok: boolean }>(`/assets/${id}`, { method: "DELETE" }),
+  uploadAsset: async (
+    productId: string,
+    file: File,
+    type: "image" | "video",
+    name?: string,
+  ): Promise<{ asset: AssetItem }> => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("productId", productId);
+    form.append("type", type);
+    form.append("name", name ?? file.name);
+    const res = await fetch(`${API_URL}/assets`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      throw new ApiError(
+        res.status,
+        typeof body.error === "string" ? body.error : `http_${res.status}`,
+        body,
+      );
+    }
+    return (await res.json()) as { asset: AssetItem };
+  },
   generateAssetText: (assetId: string) =>
     request<{ generated: GeneratedCreativeText }>(`/assets/${assetId}/auto-text`, {
       method: "POST",
@@ -1247,4 +1273,14 @@ export interface ClassifyAwarenessResponse {
   skippedNoCopy: number;
   failed: number;
   byStage: Record<AwarenessStage, number>;
+}
+
+export interface AgentStatusResponse {
+  isRunning: boolean;
+  lastRunAt: string | null;
+  nextRunAt: string | null;
+  lastError: string | null;
+  lastResults: unknown[];
+  runIntervalMinutes: number;
+  startupDelaySeconds: number;
 }

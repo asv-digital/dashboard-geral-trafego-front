@@ -62,23 +62,7 @@ export default function AssetsPage({
     setError(null);
 
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("productId", id);
-      form.append("type", uploadType);
-      form.append("name", file.name);
-
-      const response = await fetch("/api/assets", {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error || `http ${response.status}`);
-      }
-
+      await api.uploadAsset(id, file, uploadType, file.name);
       await queryClient.invalidateQueries({ queryKey: ["assets", id] });
       if (fileRef.current) {
         fileRef.current.value = "";

@@ -15,7 +15,9 @@ import { formatRelativeTime } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge, StatusDot, type Tone } from "@/components/ui/status-badge";
 
-const CYCLE_HOURS_DEFAULT = 4;
+// Fallback caso /agent/status falhe — match do default do scheduler back
+// (AGENT_RUN_INTERVAL_MINUTES=240 → 4h).
+const CYCLE_HOURS_FALLBACK = 4;
 
 export default function OrquestradorPage() {
   const queryClient = useQueryClient();
@@ -43,6 +45,15 @@ export default function OrquestradorPage() {
     queryKey: ["products"],
     queryFn: () => api.listProducts(),
   });
+  const { data: agentStatus } = useQuery({
+    queryKey: ["agent", "status"],
+    queryFn: () => api.agentStatus(),
+    refetchInterval: 5 * 60_000,
+  });
+
+  const cycleHours = agentStatus?.runIntervalMinutes
+    ? agentStatus.runIntervalMinutes / 60
+    : CYCLE_HOURS_FALLBACK;
 
   const heartbeatItems = useMemo(() => heartbeats?.heartbeats ?? [], [heartbeats]);
   const activityItems = useMemo(() => activity?.activity ?? [], [activity]);
@@ -57,12 +68,33 @@ export default function OrquestradorPage() {
     })),
   });
 
-  // Forçar ciclo agora em todos os produtos
+  const [cycleResult, setCycleResult] = useState<{
+    ok: number;
+    failed: number;
+    failedSlugs: string[];
+  } | null>(null);
+
+  // Forçar ciclo agora em todos os produtos. allSettled pra um produto com
+  // token Meta morto não derrubar a invalidação dos que rodaram OK.
   const forceCycleAll = useMutation({
     mutationFn: async () => {
-      await Promise.all(productList.map(p => api.runAgentProduct(p.id)));
+      const results = await Promise.allSettled(
+        productList.map(p => api.runAgentProduct(p.id)),
+      );
+      const ok = results.filter(r => r.status === "fulfilled").length;
+      const failedIdx: number[] = [];
+      results.forEach((r, i) => {
+        if (r.status === "rejected") failedIdx.push(i);
+      });
+      return {
+        ok,
+        failed: failedIdx.length,
+        failedSlugs: failedIdx.map(i => productList[i]?.slug ?? "?"),
+      };
     },
-    onSuccess: () => {
+    onSuccess: result => {
+      setCycleResult(result);
+      setTimeout(() => setCycleResult(null), 8000);
       queryClient.invalidateQueries({ queryKey: ["global", "heartbeats"] });
       queryClient.invalidateQueries({ queryKey: ["global", "activity"] });
     },
@@ -97,21 +129,32 @@ export default function OrquestradorPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <StatusBadge tone={overallHealth.tone} label={overallHealth.label} dot />
-            <button
-              onClick={() => forceCycleAll.mutate()}
-              disabled={forceCycleAll.isPending || productList.length === 0}
-              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              <Zap className={`w-3 h-3 ${forceCycleAll.isPending ? "animate-pulse" : ""}`} />
-              {forceCycleAll.isPending ? "rodando..." : "Forcar ciclo agora"}
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={() => forceCycleAll.mutate()}
+                disabled={forceCycleAll.isPending || productList.length === 0}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                <Zap className={`w-3 h-3 ${forceCycleAll.isPending ? "animate-pulse" : ""}`} />
+                {forceCycleAll.isPending ? "rodando..." : "Forcar ciclo agora"}
+              </button>
+              {cycleResult && (
+                <span
+                  className={`text-[10px] tabular-nums ${cycleResult.failed > 0 ? "text-warning" : "text-success"}`}
+                  title={cycleResult.failedSlugs.length > 0 ? `falharam: ${cycleResult.failedSlugs.join(", ")}` : undefined}
+                >
+                  {cycleResult.ok} OK
+                  {cycleResult.failed > 0 && ` · ${cycleResult.failed} falha${cycleResult.failed > 1 ? "s" : ""}`}
+                </span>
+              )}
+            </div>
           </div>
         }
       />
 
       {/* Cards principais: ciclo + atividade + falhas */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <CycleCountdownCard heartbeats={heartbeatItems} now={now} pulse={recentlyActive} />
+        <CycleCountdownCard heartbeats={heartbeatItems} now={now} pulse={recentlyActive} cycleHours={cycleHours} />
         <SummaryCard
           icon={<Activity className="w-4 h-4" />}
           label="Acoes hoje"
@@ -245,16 +288,18 @@ function CycleCountdownCard({
   heartbeats,
   now,
   pulse,
+  cycleHours,
 }: {
   heartbeats: HeartbeatItem[];
   now: number;
   pulse: boolean;
+  cycleHours: number;
 }) {
   const last = heartbeats.reduce<number>((acc, h) => {
     if (!h.lastCollectionAt) return acc;
     return Math.max(acc, new Date(h.lastCollectionAt).getTime());
   }, 0);
-  const next = last > 0 ? last + CYCLE_HOURS_DEFAULT * 60 * 60 * 1000 : 0;
+  const next = last > 0 ? last + cycleHours * 60 * 60 * 1000 : 0;
   const diff = next - now;
   const overdue = next > 0 && diff < 0;
   const ready = next > 0 && diff < 30_000;

@@ -5,6 +5,26 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type NewProductInput, type ProductStage } from "@/lib/api";
 
+// CTAs Meta Ads mais comuns. Lista oficial completa em:
+// developers.facebook.com/docs/marketing-api/reference/ad-creative-link-data/
+const META_CTA_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "LEARN_MORE", label: "Saiba mais" },
+  { value: "SIGN_UP", label: "Cadastre-se" },
+  { value: "SUBSCRIBE", label: "Inscreva-se" },
+  { value: "GET_OFFER", label: "Aproveitar oferta" },
+  { value: "SHOP_NOW", label: "Comprar agora" },
+  { value: "BUY_NOW", label: "Comprar" },
+  { value: "ORDER_NOW", label: "Pedir agora" },
+  { value: "GET_QUOTE", label: "Solicitar orçamento" },
+  { value: "CONTACT_US", label: "Fale conosco" },
+  { value: "DOWNLOAD", label: "Download" },
+  { value: "BOOK_TRAVEL", label: "Reservar" },
+  { value: "APPLY_NOW", label: "Inscrever-se" },
+  { value: "WATCH_MORE", label: "Assistir mais" },
+  { value: "SEND_MESSAGE", label: "Enviar mensagem" },
+  { value: "INSTALL_APP", label: "Instalar app" },
+];
+
 interface NewProductFormState {
   slug: string;
   name: string;
@@ -191,6 +211,12 @@ export default function NewProductPage() {
             value={form.defaultDescription}
             onChange={value => setField("defaultDescription", value)}
           />
+          <SelectField
+            label="CTA default (botão)"
+            value={form.defaultCTA}
+            onChange={value => setField("defaultCTA", value)}
+            options={META_CTA_OPTIONS}
+          />
         </Section>
 
         <Section title="Autonomia">
@@ -264,23 +290,23 @@ function Field({
   );
 }
 
-function SelectField({
+function SelectField<T extends string>({
   label,
   value,
   onChange,
   options,
 }: {
   label: string;
-  value: ProductStage;
-  onChange: (value: ProductStage) => void;
-  options: { value: ProductStage; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string }[];
 }) {
   return (
     <div className="space-y-1.5">
       <label className="text-xs text-muted-foreground">{label}</label>
       <select
         value={value}
-        onChange={event => onChange(event.target.value as ProductStage)}
+        onChange={event => onChange(event.target.value as T)}
         className="w-full px-3 py-2 bg-input border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
       >
         {options.map(option => (

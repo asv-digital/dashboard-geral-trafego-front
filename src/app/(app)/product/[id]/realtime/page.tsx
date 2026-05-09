@@ -64,6 +64,11 @@ export default function RealtimePage({
     queryFn: () => api.listActions(id, { limit: 100 }),
     refetchInterval: 30_000,
   });
+  const status = useQuery({
+    queryKey: ["agent", "status"],
+    queryFn: () => api.agentStatus(),
+    refetchInterval: 5 * 60_000,
+  });
 
   const items = actions.data?.actions ?? [];
   const filtered = filter === "all" ? items : items.filter(a => getCategory(a.action) === filter);
@@ -111,7 +116,7 @@ export default function RealtimePage({
           </p>
           {items.length === 0 && (
             <p className="text-muted-foreground/70 text-xs mt-1">
-              O agente roda a cada {intervalLabel()}. Aguarde ou clique &quot;rodar ciclo agora&quot; na visão geral.
+              O agente roda a cada {intervalLabel(status.data?.runIntervalMinutes)}. Aguarde ou clique &quot;rodar ciclo agora&quot; na visão geral.
             </p>
           )}
         </div>
@@ -126,8 +131,15 @@ export default function RealtimePage({
   );
 }
 
-function intervalLabel() {
-  return "4h"; // default scheduler — poderia vir de /api/agent/status
+function intervalLabel(intervalMinutes: number | undefined): string {
+  if (!intervalMinutes || !Number.isFinite(intervalMinutes)) return "—";
+  if (intervalMinutes >= 60 && intervalMinutes % 60 === 0) {
+    return `${intervalMinutes / 60}h`;
+  }
+  if (intervalMinutes >= 60) {
+    return `${(intervalMinutes / 60).toFixed(1)}h`;
+  }
+  return `${intervalMinutes}min`;
 }
 
 function getCategory(action: string): ActionCategory {

@@ -137,11 +137,12 @@ function ProfitWaterfallSection({
               const isResult = step.kind === "result";
               const isAddition = step.kind === "addition";
               const isDeduction = step.kind === "deduction";
+              const isProjection = step.kind === "projection";
               return (
                 <div
                   key={i}
                   className={`flex justify-between items-baseline px-3 py-2 rounded ${
-                    isResult ? "bg-muted/40 font-medium" : ""
+                    isResult ? "bg-muted/40 font-medium" : isProjection ? "border border-dashed border-success/30" : ""
                   }`}
                 >
                   <span
@@ -150,10 +151,13 @@ function ProfitWaterfallSection({
                         ? "text-destructive"
                         : isAddition
                           ? "text-success"
-                          : isResult
-                            ? "text-foreground"
-                            : "text-muted-foreground"
+                          : isProjection
+                            ? "text-success/70 italic"
+                            : isResult
+                              ? "text-foreground"
+                              : "text-muted-foreground"
                     }`}
+                    title={isProjection ? "Receita projetada baseada em mentoriaUpsellRate × vendas low ainda não convertidas" : undefined}
                   >
                     {step.label}
                   </span>
@@ -163,9 +167,11 @@ function ProfitWaterfallSection({
                         ? "text-destructive"
                         : isAddition
                           ? "text-success"
-                          : isResult
-                            ? "text-foreground font-medium"
-                            : "text-foreground"
+                          : isProjection
+                            ? "text-success/70 italic"
+                            : isResult
+                              ? "text-foreground font-medium"
+                              : "text-foreground"
                     }`}
                   >
                     {formatBRL(step.value)}

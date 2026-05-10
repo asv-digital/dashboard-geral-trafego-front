@@ -647,6 +647,30 @@ export const api = {
     request<{ summary: SaleSummary }>(
       `/sales/summary${qs({ productId, dateFrom, dateTo })}`
     ),
+  cartAbandonments: (productId: string, days = 30) =>
+    request<CartAbandonmentsResponse>(
+      `/sales/cart-abandonments${qs({ productId, days })}`,
+    ),
+
+  listABTests: (productId: string, status?: "running" | "concluded" | "cancelled") =>
+    request<{ tests: ABTestItem[] }>(
+      `/ab-tests${qs({ productId, status })}`,
+    ),
+  createABTest: (input: {
+    productId: string;
+    name: string;
+    adsetId: string;
+    variantA: ABTestVariant;
+    variantB: ABTestVariant;
+    minDays?: number;
+    minSpendPerVariant?: number;
+  }) =>
+    request<{ test: ABTestItem }>("/ab-tests", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  cancelABTest: (testId: string) =>
+    request<{ ok: boolean }>(`/ab-tests/${testId}`, { method: "DELETE" }),
 
   agentStatus: () => request<AgentStatusResponse>("/agent/status"),
   agentAccount: () => request<AgentAccountStatus>("/agent/account"),
@@ -699,6 +723,28 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ productId, metaCampaignId, dailyBudget }),
     }),
+
+  pauseAdsetMeta: (productId: string, adsetId: string) =>
+    request<{ ok: boolean }>("/meta-actions/adsets/pause", {
+      method: "POST",
+      body: JSON.stringify({ productId, adsetId }),
+    }),
+  activateAdsetMeta: (productId: string, adsetId: string) =>
+    request<{ ok: boolean }>("/meta-actions/adsets/activate", {
+      method: "POST",
+      body: JSON.stringify({ productId, adsetId }),
+    }),
+  updateAdsetBudgetMeta: (
+    productId: string,
+    adsetId: string,
+    dailyBudget: number,
+  ) =>
+    request<{ ok: boolean }>("/meta-actions/adsets/budget", {
+      method: "PATCH",
+      body: JSON.stringify({ productId, adsetId, dailyBudget }),
+    }),
+  listAdsets: (productId: string) =>
+    request<{ adsets: AdsetItem[] }>(`/meta-actions/adsets${qs({ productId })}`),
 
   listAssets: (productId: string) =>
     request<{ assets: AssetItem[] }>(`/assets${qs({ productId })}`),
@@ -1086,7 +1132,7 @@ export interface ProfitWaterfallStep {
   label: string;
   value: number;
   pct: number;
-  kind: "input" | "deduction" | "addition" | "result";
+  kind: "input" | "deduction" | "addition" | "result" | "projection";
 }
 export interface ProfitWaterfallResponse {
   windowDays: number;
@@ -1273,6 +1319,61 @@ export interface ClassifyAwarenessResponse {
   skippedNoCopy: number;
   failed: number;
   byStage: Record<AwarenessStage, number>;
+}
+
+export interface ABTestVariant {
+  name: string;
+  metaAdId: string;
+}
+
+export interface ABTestItem {
+  id: string;
+  productId: string;
+  name: string;
+  status: "running" | "concluded" | "cancelled";
+  adsetId: string;
+  variantA: ABTestVariant;
+  variantB: ABTestVariant;
+  startDate: string;
+  endDate: string | null;
+  minDays: number;
+  minSpendPerVariant: number;
+  winner: string | null;
+  confidence: number | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export interface CartAbandonmentItem {
+  id: string;
+  productId: string;
+  date: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerName: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  checkoutUrl: string | null;
+  recovered: boolean;
+  createdAt: string;
+}
+
+export interface CartAbandonmentsResponse {
+  days: number;
+  total: number;
+  recovered: number;
+  pending: number;
+  recoveryRate: number;
+  items: CartAbandonmentItem[];
+}
+
+export interface AdsetItem {
+  id: string;
+  name: string;
+  campaignId: string;
+  campaignName: string;
+  dailyBudget: number;
+  status: string;
 }
 
 export interface AgentStatusResponse {

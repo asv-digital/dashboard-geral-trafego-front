@@ -195,7 +195,196 @@ export default function CampaignsPage({
           initialSort={{ key: "totalInvestment", dir: "desc" }}
         />
       )}
+
+      <AdsetsSection productId={id} />
     </div>
+  );
+}
+
+function AdsetsSection({ productId }: { productId: string }) {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+  const { data, isLoading } = useQuery({
+    queryKey: ["adsets", productId],
+    queryFn: () => api.listAdsets(productId),
+    refetchInterval: 60_000,
+  });
+
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["adsets", productId] });
+
+  const pause = useMutation({
+    mutationFn: (adsetId: string) => api.pauseAdsetMeta(productId, adsetId),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: e => setError(extractMutationError(e)),
+  });
+  const activate = useMutation({
+    mutationFn: (adsetId: string) => api.activateAdsetMeta(productId, adsetId),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: e => setError(extractMutationError(e)),
+  });
+  const updateBudget = useMutation({
+    mutationFn: (params: { adsetId: string; dailyBudget: number }) =>
+      api.updateAdsetBudgetMeta(productId, params.adsetId, params.dailyBudget),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: e => setError(extractMutationError(e)),
+  });
+
+  const adsets = data?.adsets ?? [];
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-medium">Adsets ativos</h2>
+        <span className="text-xs text-muted-foreground">
+          {isLoading ? "carregando..." : `${adsets.length} adsets`}
+        </span>
+      </div>
+      {error && <div className="text-xs text-destructive">{error}</div>}
+      {!isLoading && adsets.length === 0 ? (
+        <div className="text-xs text-muted-foreground italic border border-dashed border-border rounded-lg p-4 text-center">
+          Nenhum adset ativo (ou conta Meta sem permissão).
+        </div>
+      ) : (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="text-left px-3 py-2">Adset</th>
+                <th className="text-left px-3 py-2">Campanha</th>
+                <th className="text-right px-3 py-2">Budget</th>
+                <th className="text-center px-3 py-2">Status</th>
+                <th className="text-right px-3 py-2">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {adsets.map(a => (
+                <AdsetRow
+                  key={a.id}
+                  adset={a}
+                  pending={
+                    pause.variables === a.id
+                      ? pause.isPending
+                      : activate.variables === a.id
+                        ? activate.isPending
+                        : updateBudget.variables?.adsetId === a.id
+                          ? updateBudget.isPending
+                          : false
+                  }
+                  onPause={() => pause.mutate(a.id)}
+                  onActivate={() => activate.mutate(a.id)}
+                  onChangeBudget={dailyBudget =>
+                    updateBudget.mutate({ adsetId: a.id, dailyBudget })
+                  }
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AdsetRow({
+  adset,
+  pending,
+  onPause,
+  onActivate,
+  onChangeBudget,
+}: {
+  adset: { id: string; name: string; campaignName: string; dailyBudget: number; status: string };
+  pending: boolean;
+  onPause: () => void;
+  onActivate: () => void;
+  onChangeBudget: (n: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(String(adset.dailyBudget));
+  const isActive = adset.status === "ACTIVE";
+  return (
+    <tr className="border-t border-border">
+      <td className="px-3 py-2 font-medium truncate max-w-[260px]" title={adset.name}>
+        {adset.name}
+      </td>
+      <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[200px]" title={adset.campaignName}>
+        {adset.campaignName}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {editing ? (
+          <div className="flex items-center gap-1 justify-end">
+            <input
+              type="number"
+              step="0.01"
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              className="w-20 px-2 py-1 bg-input border border-border rounded text-xs"
+            />
+            <button
+              onClick={() => {
+                const n = Number(draft);
+                if (Number.isFinite(n) && n > 0) {
+                  onChangeBudget(n);
+                  setEditing(false);
+                }
+              }}
+              disabled={pending}
+              className="text-[10px] text-success hover:underline disabled:opacity-50"
+            >
+              salvar
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="text-[10px] text-muted-foreground hover:underline"
+            >
+              x
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setDraft(String(adset.dailyBudget));
+              setEditing(true);
+            }}
+            className="text-xs hover:text-primary tabular-nums"
+            title="editar budget"
+          >
+            {formatBRL(adset.dailyBudget)}
+          </button>
+        )}
+      </td>
+      <td className="px-3 py-2 text-center">
+        <StatusBadge tone={isActive ? "success" : "muted"} label={adset.status.toLowerCase()} dot size="sm" />
+      </td>
+      <td className="px-3 py-2 text-right">
+        {isActive ? (
+          <button
+            onClick={onPause}
+            disabled={pending}
+            className="text-xs px-2 py-1 bg-muted hover:bg-muted/70 rounded disabled:opacity-50"
+          >
+            {pending ? "..." : "pausar"}
+          </button>
+        ) : (
+          <button
+            onClick={onActivate}
+            disabled={pending}
+            className="text-xs px-2 py-1 bg-success/10 text-success hover:bg-success/20 rounded disabled:opacity-50"
+          >
+            {pending ? "..." : "ativar"}
+          </button>
+        )}
+      </td>
+    </tr>
   );
 }
 

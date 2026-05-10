@@ -47,6 +47,7 @@ const TAB_GROUPS: TabGroup[] = [
       { slug: "creatives", label: "Criativos" },
       { slug: "assets", label: "Conteudo" },
       { slug: "planner", label: "Planner" },
+      { slug: "ab-tests", label: "A/B tests" },
     ],
   },
   {

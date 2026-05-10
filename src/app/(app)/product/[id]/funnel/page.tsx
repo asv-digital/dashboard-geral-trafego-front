@@ -151,7 +151,82 @@ export default function FunnelPage({ params }: { params: Promise<{ id: string }>
           }
         />
       </section>
+
+      <CartAbandonmentSection productId={id} />
     </div>
+  );
+}
+
+function CartAbandonmentSection({ productId }: { productId: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["cart-abandonments", productId, 30],
+    queryFn: () => api.cartAbandonments(productId, 30),
+    refetchInterval: 5 * 60_000,
+  });
+  if (isLoading || !data) return null;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-medium">Carrinhos abandonados (30d)</h2>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {data.recovered}/{data.total} recuperados ({data.recoveryRate.toFixed(1)}%)
+        </span>
+      </div>
+      {data.total === 0 ? (
+        <div className="text-xs text-muted-foreground italic border border-dashed border-border rounded-lg p-4 text-center">
+          Nenhum carrinho abandonado registrado. Kirvano envia o evento{" "}
+          <code>cart_abandoned</code> quando há checkout sem aprovação.
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          <MetricCard label="Total" value={formatNumber(data.total)} />
+          <MetricCard label="Recuperados" value={formatNumber(data.recovered)} />
+          <MetricCard label="Pendentes" value={formatNumber(data.pending)} />
+        </div>
+      )}
+      {data.items.length > 0 && (
+        <div className="border border-border rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="text-left px-3 py-2">Email</th>
+                <th className="text-left px-3 py-2">Campanha</th>
+                <th className="text-left px-3 py-2">Quando</th>
+                <th className="text-center px-3 py-2">Recuperado?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.slice(0, 20).map(c => (
+                <tr key={c.id} className="border-t border-border">
+                  <td className="px-3 py-2 truncate max-w-[200px]">
+                    {c.customerEmail || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground truncate max-w-[180px]">
+                    {c.utmCampaign || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    {new Date(c.date).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {c.recovered ? (
+                      <span className="text-success text-xs">✓</span>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
